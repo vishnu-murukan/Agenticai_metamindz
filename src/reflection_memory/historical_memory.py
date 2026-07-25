@@ -20,60 +20,60 @@ class HistoricalMemoryAgent:
         self._seed_default_incidents()
 
     def _seed_default_incidents(self):
-        """Seed the memory bank with realistic system failure & negotiation incident reports."""
+        """Seed the memory bank with realistic manufacturing failure & negotiation incident reports."""
         default_incidents = [
             IncidentReport(
                 id="INC-2024-089",
-                title="Monolith Cloud Migration Memory Leak",
-                domain="Infrastructure",
-                description="Migrated core service without worker thread pool limits under 4x traffic peak. Memory footprint spiked, causing cascading pod crashes.",
-                outcome="FAILURE: System suffered 42-minute global outage.",
+                title="Machine #4 Bearing Failure & Thermal Runaway",
+                domain="Plant Maintenance",
+                description="Operated Machine #4 CNC spindle without lubrication monitoring under 4x production throughput peak. Thermal expansion caused bearing lockup and conveyor line jam.",
+                outcome="FAILURE: Production line suffered 42-minute factory floor shutdown.",
                 risk_score=0.88,
                 lessons_learned=[
-                    "Enforce strict per-container memory limits.",
-                    "Mandate auto-scaling policies with automatic failover.",
-                    "Never deploy capacity changes without load-test proof."
+                    "Enforce strict per-machine thermal and vibration limits.",
+                    "Mandate predictive maintenance policies with automatic safety interlocks.",
+                    "Never deploy production speed increases without load-test proof."
                 ],
-                tags=["infrastructure", "traffic_spike", "memory_leak", "failover", "outage"]
+                tags=["manufacturing", "machine_4", "bearing_failure", "interlock", "shutdown"]
             ),
             IncidentReport(
                 id="INC-2025-014",
-                title="Uncapped Marketing Budget Allocation",
-                domain="Finance",
-                description="Approved $120k ad campaign budget without dynamic spend safety limits or ROI benchmarks during Q2 launch.",
+                title="Uncapped CNC Tooling Budget Allocation",
+                domain="Plant Operations",
+                description="Approved $120k tooling upgrade budget without dynamic spend safety limits or ROI benchmarks during Q2 production run.",
                 outcome="PARTIAL LOSS: Overspent by $45k with sub-1.0 ROI.",
                 risk_score=0.75,
                 lessons_learned=[
-                    "Cap total unhedged campaign budget at $50,000.",
-                    "Require SafetyAgent SOP approval for all tier-1 budget changes."
+                    "Cap total unhedged tooling budget at $50,000.",
+                    "Require SafetyAgent SOP approval for all tier-1 capital equipment changes."
                 ],
-                tags=["budget", "finance", "overspend", "sop_violation"]
+                tags=["budget", "plant_operations", "overspend", "sop_violation"]
             ),
             IncidentReport(
                 id="INC-2025-042",
-                title="Database Deadlock under High Concurrent Write Rate",
-                domain="Database",
-                description="Disabled read-replicas during peak flash sale to save infrastructure costs, causing database lock contention.",
-                outcome="CRITICAL: Transaction failure rate hit 68%.",
+                title="PLC Lockup under High Concurrent Conveyor Feed Rate",
+                domain="Automation / PLC",
+                description="Disabled redundant sensor checks during peak production run to save power costs, causing PLC input lock contention.",
+                outcome="CRITICAL: Robot arm assembly failure rate hit 68%.",
                 risk_score=0.92,
                 lessons_learned=[
-                    "Read-replicas must remain active during any high-concurrency event.",
-                    "Blue-green deployment strategy required for DB schema updates."
+                    "Redundant PLC sensor feeds must remain active during any high-throughput event.",
+                    "Staged rollout strategy required for PLC firmware and sensor updates."
                 ],
-                tags=["database", "deadlock", "concurrency", "traffic_spike", "replicas"]
+                tags=["plc", "sensor_drift", "conveyor", "high_throughput", "redundancy"]
             ),
             IncidentReport(
                 id="INC-2025-103",
-                title="Successful Auto-Scale Rollout with Fallback Strategy",
-                domain="Infrastructure",
-                description="Deployed gradual blue-green rollout with 20% canary traffic, automated fallback triggers, and active load monitoring.",
-                outcome="SUCCESS: Handled 5x peak traffic with 99.99% availability.",
+                title="Successful Machine #4 Predictive Maintenance & Interlock Rollout",
+                domain="Predictive Maintenance",
+                description="Deployed gradual staged rollout on Machine #4 with 20% conveyor load, automated interlock triggers, and active sensor monitoring.",
+                outcome="SUCCESS: Handled 5x production throughput with 99.99% operational uptime.",
                 risk_score=0.15,
                 lessons_learned=[
-                    "Canary deployments reduce blast radius effectively.",
-                    "Pre-warmed instances mitigate latency spikes during scaling."
+                    "Staged rollouts reduce blast radius on assembly lines effectively.",
+                    "Pre-calibrated sensors mitigate calibration drift during scaling."
                 ],
-                tags=["canary", "auto_scaling", "success", "blue_green", "fallback"]
+                tags=["staged_rollout", "predictive_maintenance", "success", "machine_4", "interlock"]
             )
         ]
         for inc in default_incidents:

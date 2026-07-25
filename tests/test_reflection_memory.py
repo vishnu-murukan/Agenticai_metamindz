@@ -19,12 +19,12 @@ from reflection_memory import (
 def test_devils_advocate_renegotiation_trigger():
     agent = DevilsAdvocateAgent(min_evidence_confidence=0.8, risk_tolerance_threshold=0.5)
 
-    # Proposal with no evidence and high traffic spike multiplier
+    # Proposal with no evidence and high production speed multiplier
     proposal = Proposal(
         id="PROP-001",
-        title="Aggressive Scaling Proposal",
-        description="Scale infrastructure by 5x without load testing",
-        proposed_by="InfraLead",
+        title="Machine #4 Aggressive Throughput Proposal",
+        description="Scale Machine #4 production throughput by 5x without load testing",
+        proposed_by="PlantOps_Lead",
         parameters={"traffic_spike_multiplier": 5.0, "auto_failover": False},
         evidences=[]
     )
@@ -40,8 +40,8 @@ def test_devils_advocate_renegotiation_trigger():
 def test_historical_memory_faiss_mid_reasoning_query():
     memory_agent = HistoricalMemoryAgent()
 
-    # Query mid-reasoning about memory leak incidents
-    results = memory_agent.query_mid_reasoning(query="memory leak traffic spike outage", top_k=2)
+    # Query mid-reasoning about machine 4 bearing failure incidents
+    results = memory_agent.query_mid_reasoning(query="machine 4 bearing failure shutdown", top_k=2)
 
     assert len(results) > 0
     top_incident, score = results[0]
@@ -56,11 +56,11 @@ def test_safety_agent_hard_veto():
     # Proposal violating budget cap ($50,000 max, proposing $100,000)
     proposal = Proposal(
         id="PROP-002",
-        title="Over-budget Marketing Campaign",
-        description="Massive ad buy",
-        proposed_by="GrowthLead",
+        title="Over-budget CNC Machine Overhaul",
+        description="Massive tooling buy",
+        proposed_by="PlantOps_Lead",
         parameters={"budget_allocation": 100000.0, "auto_failover": True},
-        evidences=[Evidence("EV-01", "Preliminary survey", "SurveyCorp", 0.9)]
+        evidences=[Evidence("EV-01", "Preliminary vendor quote", "ToolingCorp", 0.9)]
     )
 
     verdict = safety_agent.validate_proposal(proposal)
@@ -74,11 +74,11 @@ def test_negotiation_simulator_resolution_flow():
     simulator = NegotiationSimulator()
 
     # Proposal that complies with safety and has strong evidence
-    strong_evidence = Evidence("EV-LOAD-01", "Passed 5x synthetic load test", "BenchmarkSuite", 0.95)
+    strong_evidence = Evidence("EV-LOAD-01", "Passed 5x machine load stress test", "AutomatedTestRig", 0.95)
     proposal = Proposal(
         id="PROP-003",
-        title="Balanced Infrastructure Upgrade",
-        description="Controlled rollout with auto-failover and load testing",
+        title="Balanced Machine #4 Upgrade",
+        description="Controlled rollout with safety interlocks and load testing",
         proposed_by="ReliabilityTeam",
         parameters={
             "budget_allocation": 35000.0,

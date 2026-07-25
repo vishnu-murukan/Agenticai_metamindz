@@ -46,15 +46,15 @@ class DevilsAdvocateAgent:
         # 2. Check for Specific Risk Factors in Parameters
         params = proposal.parameters or {}
 
-        # Load / Capacity scaling risk check
+        # Production throughput speed scaling risk check
         if params.get("traffic_spike_multiplier", 1.0) > 3.0 and not any("load_test" in e.id.lower() or "load" in e.description.lower() for e in proposal.evidences):
-            missing_evidences.append("Load testing results under 3x+ traffic multiplier missing.")
-            counter_claims.append("High traffic scaling without verified load tests risks cascading service failure.")
+            missing_evidences.append("Machine stress/load testing results under 3x+ throughput multiplier missing.")
+            counter_claims.append("High production speed scaling without verified load tests risks cascading machine and conveyor line failure.")
             calculated_risk += 0.35
 
-        # Failover mechanism risk check
+        # Failover / Safety interlock mechanism risk check
         if params.get("auto_failover") is False and proposal.risk_level in ["HIGH", "CRITICAL"]:
-            counter_claims.append("Manual failover for high-risk deployment introduces unacceptably high mean-time-to-recovery (MTTR).")
+            counter_claims.append("Manual safety interlock override for high-risk Machine #4 operation introduces unacceptably high downtime (MTTR).")
             calculated_risk += 0.3
 
         # Cost / Resource efficiency risk check

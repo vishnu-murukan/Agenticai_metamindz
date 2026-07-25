@@ -21,7 +21,8 @@ from reflection_memory import (
 
 def run_transcript():
     print("=" * 80)
-    print("      DECISION TWIN SYSTEM: REFLECTION & MEMORY NEGOTIATION TRANSCRIPT")
+    print("  DECISION TWIN SYSTEM: REFLECTION & MEMORY NEGOTIATION TRANSCRIPT")
+    print("  SCENARIO: Industry 4.0 Manufacturing & Machine #4 Optimization")
     print("=" * 80)
     print("Target Branch: feat/reflection-memory")
     print("Agents Involved: Proposer, SafetyAgent, HistoricalMemoryAgent (RAG), DevilsAdvocateAgent")
@@ -33,14 +34,14 @@ def run_transcript():
     # ROUND 1: INITIAL PROPOSAL (Will trigger Safety Hard Veto & DA Challenge)
     # ---------------------------------------------------------
     print("┌" + "─" * 78 + "┐")
-    print("│ ROUND 1: INITIAL PROPOSAL (Aggressive Cloud Infrastructure Redesign)      │")
+    print("│ ROUND 1: INITIAL PROPOSAL (Machine #4 High-Speed Overhaul & Throughput Boost)│")
     print("└" + "─" * 78 + "┘")
 
     prop_r1 = Proposal(
         id="PROP-001",
-        title="Instant Global Cloud Migration & Capacity Expansion",
-        description="Migrate core billing service directly to unpartitioned high-mem instances to handle anticipated 4x flash sale spike.",
-        proposed_by="LeadArch_Dev",
+        title="Machine #4 High-Speed Overhaul & Throughput Boost",
+        description="Upgrade Machine #4 CNC spindle drive and conveyor feed directly to 4.5x overdrive capacity to meet aggressive production targets.",
+        proposed_by="PlantOps_Lead",
         parameters={
             "budget_allocation": 120000.0,
             "traffic_spike_multiplier": 4.5,
@@ -48,7 +49,7 @@ def run_transcript():
             "prohibited_flags": []
         },
         evidences=[
-            Evidence("EV-PRELIM-01", "Vendor marketing benchmark flyer", "CloudProviderCorp", 0.45)
+            Evidence("EV-PRELIM-01", "Supplier marketing spec flyer", "ToolingVendorCorp", 0.45)
         ],
         risk_level="HIGH"
     )
@@ -56,8 +57,8 @@ def run_transcript():
     print(f"[PROPOSAL SUBMITTED]: '{prop_r1.title}'")
     print(f"  Proposed By: {prop_r1.proposed_by}")
     print(f"  Budget Requested: ${prop_r1.parameters['budget_allocation']:,.2f}")
-    print(f"  Traffic Multiplier: {prop_r1.parameters['traffic_spike_multiplier']}x")
-    print(f"  Auto-Failover: {prop_r1.parameters['auto_failover']}")
+    print(f"  Production Speed Multiplier: {prop_r1.parameters['traffic_spike_multiplier']}x")
+    print(f"  Auto-Interlock / Safety Failover: {prop_r1.parameters['auto_failover']}")
     print(f"  Evidence Count: {len(prop_r1.evidences)} (Confidence: {prop_r1.evidences[0].confidence_score})")
 
     res_r1 = simulator.evaluate_proposal_round(1, prop_r1)
@@ -94,9 +95,9 @@ def run_transcript():
 
     prop_r2 = Proposal(
         id="PROP-001-REV1",
-        title="Targeted Service Migration with Static Cluster",
-        description="Reduced cluster size to fit budget cap, keeping read-replicas disabled to stay within cost.",
-        proposed_by="LeadArch_Dev",
+        title="Machine #4 Static Overhaul with Disabled Sensor Replicas",
+        description="Reduced tooling budget to $45,000 to meet SOP limit, keeping redundant PLC sensor feeds disabled to save setup cost.",
+        proposed_by="PlantOps_Lead",
         parameters={
             "budget_allocation": 45000.0,
             "traffic_spike_multiplier": 3.5,
@@ -104,14 +105,14 @@ def run_transcript():
             "prohibited_flags": ["disable_replicas"]
         },
         evidences=[
-            Evidence("EV-STAGING-01", "Internal staging cluster metric logs", "DevOpsMetrics", 0.68)
+            Evidence("EV-STAGING-01", "Internal shop floor test log", "PlantMetrics", 0.68)
         ],
         risk_level="MEDIUM"
     )
 
     print(f"[REVISED PROPOSAL SUBMITTED]: '{prop_r2.title}'")
     print(f"  Budget Requested: ${prop_r2.parameters['budget_allocation']:,.2f} (Complies with $50k SOP limit)")
-    print(f"  Traffic Multiplier: {prop_r2.parameters['traffic_spike_multiplier']}x")
+    print(f"  Production Speed Multiplier: {prop_r2.parameters['traffic_spike_multiplier']}x")
 
     res_r2 = simulator.evaluate_proposal_round(2, prop_r2)
 
@@ -140,14 +141,14 @@ def run_transcript():
     # ROUND 3: FINAL REVISED PROPOSAL (Fully Compliant & Validated -> RESOLVED)
     # ---------------------------------------------------------
     print("┌" + "─" * 78 + "┐")
-    print("│ ROUND 3: FINAL REVISED PROPOSAL (Canary Auto-Scale & Load Tested)        │")
+    print("│ ROUND 3: FINAL REVISED PROPOSAL (Predictive Maintenance & Staged Rollout)│")
     print("└" + "─" * 78 + "┘")
 
     prop_r3 = Proposal(
         id="PROP-001-REV2",
-        title="Canary Blue-Green Migration with Dynamic Auto-Scaling",
-        description="Deploy 20% canary traffic with active read-replicas, dynamic auto-scaling up to 3x, and automated instant rollbacks.",
-        proposed_by="LeadArch_Dev",
+        title="Machine #4 Predictive Maintenance & Staged Conveyor Rollout",
+        description="Deploy Machine #4 with 20% staged conveyor load, active redundant PLC sensors, dynamic speed scaling up to 2.5x, and automated thermal safety interlocks.",
+        proposed_by="PlantOps_Lead",
         parameters={
             "budget_allocation": 38000.0,
             "traffic_spike_multiplier": 2.5,
@@ -155,14 +156,14 @@ def run_transcript():
             "prohibited_flags": []
         },
         evidences=[
-            Evidence("EV-LOAD-99", "Synthetic 3x Peak Load Test Benchmark", "AutomatedPerfSuite", 0.96)
+            Evidence("EV-LOAD-99", "Machine #4 3x Peak Load Stress Benchmark", "AutomatedTestRig", 0.96)
         ],
         risk_level="LOW"
     )
 
     print(f"[FINAL PROPOSAL SUBMITTED]: '{prop_r3.title}'")
     print(f"  Budget Requested: ${prop_r3.parameters['budget_allocation']:,.2f}")
-    print(f"  Traffic Multiplier: {prop_r3.parameters['traffic_spike_multiplier']}x")
+    print(f"  Production Speed Multiplier: {prop_r3.parameters['traffic_spike_multiplier']}x")
     print(f"  Evidence: {prop_r3.evidences[0].id} - {prop_r3.evidences[0].description} (Confidence: {prop_r3.evidences[0].confidence_score})")
 
     res_r3 = simulator.evaluate_proposal_round(3, prop_r3)

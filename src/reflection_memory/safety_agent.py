@@ -18,21 +18,21 @@ class SafetyAgent:
                 name="Maximum Single Proposal Budget Cap",
                 category=SOPCategory.BUDGET,
                 max_threshold=50000.0,
-                remediation_advice="Reduce proposed budget allocation to $50,000 or below."
+                remediation_advice="Reduce proposed equipment budget allocation to $50,000 or below."
             ),
             SOPRule(
                 rule_id="SOP-OPS-02",
-                name="High Traffic Fallback Enforcement",
+                name="High Production Throughput Interlock Enforcement",
                 category=SOPCategory.OPERATIONAL_BLAST_RADIUS,
                 prohibited_actions=["no_auto_failover", "disable_replicas"],
-                remediation_advice="Enable automated failover and blue-green canary deployment."
+                remediation_advice="Enable automated safety interlock and redundant conveyor sensor feeds."
             ),
             SOPRule(
                 rule_id="SOP-SEC-03",
-                name="Unverified High-Risk Deployment Prohibition",
+                name="Unverified High-Risk Machine Operation Prohibition",
                 category=SOPCategory.SECURITY,
                 prohibited_actions=["skip_load_testing", "bypass_security_scan"],
-                remediation_advice="Include valid load testing evidence and security scan reports."
+                remediation_advice="Include valid machine load testing evidence and safety inspection reports."
             )
         ]
 
