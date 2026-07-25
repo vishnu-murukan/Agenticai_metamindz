@@ -1,0 +1,22 @@
+{
+  "name": "metamindz-hackathon-agenticai",
+  "version": "1.0.0",
+  "description": "Decision Twin Reflection & Memory Module built with NitroStack TypeScript SDK",
+  "main": "dist/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "demo": "tsx run_demo_transcript.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@nitrostack/core": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}
