@@ -1,39 +1,57 @@
 # Dependencies
 node_modules/
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-venv/
-env/
+src/widgets/node_modules/
 
-# Environment variables
+# Build outputs
+dist/
+src/widgets/.next/
+src/widgets/out/
+
+# Environment files
 .env
 .env.local
 .env.*.local
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
 *.swo
+*~
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
-
-# Build outputs
-dist/
-build/
-*.egg-info/
 
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Vector DB local storage
-chroma_data/
-faiss_index/
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
 
-# Misc
-.cache/
+# Coverage
+coverage/
+.nyc_output/
+
+# Uploads
+uploads/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache
+.npm/
+
+# Optional eslint cache
+.eslintcache
+
+# OAuth tokens/secrets (never commit these!)
+*.pem
+*.key
+tokens.json

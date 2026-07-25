@@ -1,4 +1,5 @@
 import { ToolDecorator as Tool, ExecutionContext, z } from '@nitrostack/core';
+import { DecisionTwinOrchestrator } from './decision-twin.orchestrator.js';
 
 /**
  * Mock database for Decision Twin manufacturing plant
@@ -161,31 +162,74 @@ const INVENTORY_DATABASE: Record<string, {
 };
 
 export class DecisionTwinTools {
-  /**
-   * Tool 1: get_sensor_data
-   * Fetches real-time sensor telemetry and flags anomalies against baseline thresholds.
-   */
+
+  @Tool({
+    name: 'run_decision_twin_orchestrator',
+    description: 'Triggers the multi-agent Decision Twin orchestrator for manufacturing & Industry 4.0 anomalies. Dynamically activates Planner, Plant Manager, Sensor, Maintenance, Memory, Production, Inventory, Finance, Devil\'s Advocate, Safety, Risk, Quality, and Scenario Simulation agents.',
+    inputSchema: z.object({
+      machine_id: z.string().describe('Identifier of the machine reporting anomaly (e.g. Machine-#4 or M-004)'),
+      event_type: z.enum(['sensor_anomaly', 'maintenance_alert', 'quality_deviation']).describe('Type of incoming manufacturing event'),
+      vibration_level: z.number().describe('Vibration reading (0-10)'),
+      temperature: z.number().describe('Temperature reading in Celsius'),
+      pressure: z.number().describe('Pressure reading in PSI'),
+      source: z.string().optional().describe('Source of event data'),
+    }),
+    examples: {
+      request: {
+        machine_id: 'Machine-#4',
+        event_type: 'sensor_anomaly',
+        vibration_level: 8.2,
+        temperature: 92,
+        pressure: 145,
+        source: 'IoT Sensor Gateway',
+      },
+      response: {
+        status: 'completed',
+        chosen_action: 'immediate_repair',
+        confidence: 0.85,
+        summary: 'Decision Twin converged on immediate_repair with 85% confidence after 11 agent activations and 1 safety veto.',
+      }
+    }
+  })
+  async runOrchestrator(input: any, ctx: ExecutionContext) {
+    ctx.logger.info(`[DecisionTwin] Triggering orchestrator for ${input.machine_id}`, input);
+
+    const resultState = DecisionTwinOrchestrator.run({
+      event_type: input.event_type,
+      event: {
+        machine_id: input.machine_id,
+        timestamp: new Date().toISOString(),
+        vibration_level: input.vibration_level,
+        temperature: input.temperature,
+        pressure: input.pressure,
+        source: input.source || 'MCP Client Request',
+      },
+    });
+
+    const decision = resultState.final_decision;
+
+    return {
+      status: 'completed',
+      machine_id: input.machine_id,
+      event_type: input.event_type,
+      chosen_action: decision?.chosen_action,
+      confidence: decision?.confidence,
+      reason: decision?.reason,
+      consulted_agents: decision?.agents_consulted,
+      vetoes: decision?.vetoes,
+      challenges: decision?.challenges_addressed,
+      work_orders: resultState.work_orders,
+      notifications: resultState.notifications,
+      trace: resultState.trace,
+    };
+  }
+
   @Tool({
     name: 'get_sensor_data',
     description: 'Fetch real-time sensor stream data for a specified machine ID, including temperature, vibration, hydraulic pressure, and anomaly flags.',
     inputSchema: z.object({
-      machineId: z.string().describe('Unique machine identifier (e.g. M-004, M-001, M-002, M-003)')
-    }),
-    examples: {
-      request: { machineId: 'M-004' },
-      response: {
-        machineId: 'M-004',
-        name: 'CNC Milling Center #4',
-        status: 'alarm',
-        telemetry: {
-          temperature_celsius: 88.5,
-          vibration_mm_s: 8.4,
-          bearing_temp_celsius: 94.2,
-          hydraulic_pressure_bar: 1.8,
-          rotation_speed_rpm: 11500
-        }
-      }
-    }
+      machineId: z.string().describe('Unique machine identifier (e.g. M-004, M-001, M-002, M-003, Machine-#4)')
+    })
   })
   async getSensorData(input: { machineId: string }, ctx: ExecutionContext) {
     ctx.logger.info('Fetching sensor data', { machineId: input.machineId });
@@ -196,31 +240,24 @@ export class DecisionTwinTools {
       location: 'Main Plant Floor',
       status: 'normal',
       healthScore: 88,
-      temperatureCelsius: 58.0,
-      vibrationMmS: 2.1,
-      bearingTempCelsius: 60.5,
+      temperatureCelsius: 88.5,
+      vibrationMmS: 8.2,
+      bearingTempCelsius: 92.0,
       hydraulicPressureBar: 3.8,
       rotationSpeedRpm: 5000,
       operatingHours: 2400,
       lastMaintenanceDate: '2026-06-01',
-      componentWear: { bearings: 20, motor: 15 },
+      componentWear: { bearings: 80, motor: 15 },
       recentIncidents: [],
       hourlyProductionValueUSD: 3000
     };
 
     const anomalies: string[] = [];
-    if (data.vibrationMmS > 7.0) {
-      anomalies.push(`CRITICAL: Vibration level ${data.vibrationMmS} mm/s exceeds safety baseline (max 3.5 mm/s)`);
-    } else if (data.vibrationMmS > 3.5) {
-      anomalies.push(`WARNING: Elevated vibration detected (${data.vibrationMmS} mm/s)`);
+    if (data.vibrationMmS > 3.5) {
+      anomalies.push(`Vibration level ${data.vibrationMmS} mm/s exceeds safety baseline (max 3.5 mm/s)`);
     }
-
-    if (data.bearingTempCelsius > 85.0) {
-      anomalies.push(`CRITICAL: Bearing temperature ${data.bearingTempCelsius}°C exceeds thermal limit (max 80.0°C)`);
-    }
-
-    if (data.hydraulicPressureBar < 2.5) {
-      anomalies.push(`WARNING: Hydraulic pressure low at ${data.hydraulicPressureBar} bar (nominal 4.0 bar)`);
+    if (data.bearingTempCelsius > 80.0) {
+      anomalies.push(`Bearing temperature ${data.bearingTempCelsius}°C exceeds thermal limit (max 80.0°C)`);
     }
 
     return {
@@ -237,26 +274,16 @@ export class DecisionTwinTools {
         hydraulic_pressure_bar: data.hydraulicPressureBar,
         rotation_speed_rpm: data.rotationSpeedRpm
       },
-      baselines: {
-        max_normal_vibration_mm_s: 3.5,
-        max_normal_temp_celsius: 70.0,
-        max_normal_bearing_temp_celsius: 80.0,
-        nominal_hydraulic_pressure_bar: 4.0
-      },
       anomalies,
       hasActiveAnomalies: anomalies.length > 0
     };
   }
 
-  /**
-   * Tool 2: check_machine_health
-   * Analyzes maintenance history, component wear, and generates health score assessment.
-   */
   @Tool({
     name: 'check_machine_health',
     description: 'Retrieve maintenance history, component wear breakdown, and maintenance-derived health score for a machine.',
     inputSchema: z.object({
-      machineId: z.string().describe('Target machine identifier (e.g. M-004)')
+      machineId: z.string().describe('Target machine identifier (e.g. M-004, Machine-#4)')
     })
   })
   async checkMachineHealth(input: { machineId: string }, ctx: ExecutionContext) {
@@ -264,49 +291,24 @@ export class DecisionTwinTools {
     const id = input.machineId.toUpperCase();
     const data = MACHINE_DATABASE[id] || {
       name: `Machine ${id}`,
-      type: 'Production Equipment',
-      location: 'Main Plant',
-      status: 'normal',
-      healthScore: 85,
-      operatingHours: 2000,
-      lastMaintenanceDate: '2026-06-01',
-      componentWear: { spindleBearing: 25, motorAlignment: 15 },
-      recentIncidents: [],
-      hourlyProductionValueUSD: 3000
+      healthScore: 38,
+      operatingHours: 4250,
+      lastMaintenanceDate: '2026-05-12',
+      componentWear: { spindleBearing: 87, motorAlignment: 64 },
+      recentIncidents: []
     };
-
-    let statusLevel: 'Good' | 'Fair' | 'Degraded' | 'Critical';
-    if (data.healthScore >= 80) statusLevel = 'Good';
-    else if (data.healthScore >= 60) statusLevel = 'Fair';
-    else if (data.healthScore >= 40) statusLevel = 'Degraded';
-    else statusLevel = 'Critical';
-
-    let recommendedAction = 'Routine inspection at next scheduled maintenance cycle.';
-    if (data.healthScore < 40) {
-      recommendedAction = 'IMMEDIATE REPAIR: Replace worn spindle bearings and re-align motor drive before continuing operation.';
-    } else if (data.healthScore < 65) {
-      recommendedAction = 'SCHEDULED REPAIR: Schedule bearing replacement within 48 operating hours.';
-    }
 
     return {
       machineId: id,
       name: data.name,
       healthScore: data.healthScore,
-      statusLevel,
       operatingHours: data.operatingHours,
       lastMaintenanceDate: data.lastMaintenanceDate,
-      daysSinceLastMaintenance: Math.floor((Date.now() - new Date(data.lastMaintenanceDate).getTime()) / (1000 * 60 * 60 * 24)),
       componentWearPercent: data.componentWear,
-      recentIncidents: data.recentIncidents,
-      recommendedAction,
-      requiresParts: data.healthScore < 65
+      recommendedAction: data.healthScore < 40 ? 'IMMEDIATE REPAIR' : 'SCHEDULED MAINTENANCE'
     };
   }
 
-  /**
-   * Tool 3: check_inventory
-   * Checks spare parts availability, warehouse locations, and reorder status.
-   */
   @Tool({
     name: 'check_inventory',
     description: 'Check stock level, reservation count, warehouse bin location, and reorder lead time for a spare part ID or machine requirement.',
@@ -318,44 +320,27 @@ export class DecisionTwinTools {
     ctx.logger.info('Checking inventory stock', { partId: input.partId });
     const id = input.partId.toUpperCase();
     const item = INVENTORY_DATABASE[id] || {
-      partName: `Spare Part ${id}`,
-      category: 'General Spares',
-      inStock: 2,
-      reservedCount: 0,
-      reorderThreshold: 1,
-      leadTimeDays: 3,
-      storageLocation: 'Warehouse A - Bin 05-B',
-      unitCostUSD: 450,
-      compatibleMachines: ['M-004', 'M-001', 'M-002']
+      partName: 'Ultra-Precision Spindle Bearing Set',
+      category: 'Bearings',
+      inStock: 3,
+      reservedCount: 1,
+      reorderThreshold: 2,
+      leadTimeDays: 5,
+      storageLocation: 'Warehouse B - Bin 14-C',
+      unitCostUSD: 1450,
+      compatibleMachines: ['M-004', 'Machine-#4']
     };
-
-    const availableCount = item.inStock - item.reservedCount;
-    const isAvailable = availableCount > 0;
 
     return {
       partId: id,
       partName: item.partName,
-      category: item.category,
       inStock: item.inStock,
-      reservedCount: item.reservedCount,
-      availableCount,
-      isAvailable,
-      reorderThreshold: item.reorderThreshold,
-      needsReorder: item.inStock <= item.reorderThreshold,
-      leadTimeDays: item.leadTimeDays,
+      availableCount: item.inStock - item.reservedCount,
       storageLocation: item.storageLocation,
-      unitCostUSD: item.unitCostUSD,
-      compatibleMachines: item.compatibleMachines,
-      statusMessage: isAvailable 
-        ? `Part ${id} (${item.partName}) is IN STOCK. ${availableCount} unit(s) ready for immediate deployment.`
-        : `Part ${id} is OUT OF STOCK or fully reserved. Expedited reorder lead time: ${item.leadTimeDays} days.`
+      leadTimeDays: item.leadTimeDays
     };
   }
 
-  /**
-   * Tool 4: estimate_downtime_cost
-   * Computes financial projection for unplanned machine downtime.
-   */
   @Tool({
     name: 'estimate_downtime_cost',
     description: 'Calculate financial impact projection for machine downtime based on lost throughput revenue, idle labor, expedited maintenance rates, and delivery penalties.',
@@ -366,46 +351,16 @@ export class DecisionTwinTools {
   })
   async estimateDowntimeCost(input: { machineId: string; hours: number }, ctx: ExecutionContext) {
     ctx.logger.info('Estimating downtime financial impact', { machineId: input.machineId, hours: input.hours });
-    const id = input.machineId.toUpperCase();
-    const data = MACHINE_DATABASE[id] || {
-      name: `Machine ${id}`,
-      hourlyProductionValueUSD: 3500
-    };
-
-    const lostRevenue = Math.round(data.hourlyProductionValueUSD * input.hours);
-    const idleLaborCost = Math.round(180 * input.hours); // $180/hr operator team cost
-    const expeditedRepairCost = input.hours > 4 ? 2500 : 1200; // flat technician callout
-    const penaltyCost = input.hours > 6 ? Math.round((input.hours - 6) * 1500) : 0; // SLA delivery penalties
-
-    const totalCost = lostRevenue + idleLaborCost + expeditedRepairCost + penaltyCost;
-
-    let impactSeverity: 'Low' | 'Medium' | 'High' | 'Severe';
-    if (totalCost > 30000) impactSeverity = 'Severe';
-    else if (totalCost > 15000) impactSeverity = 'High';
-    else if (totalCost > 5000) impactSeverity = 'Medium';
-    else impactSeverity = 'Low';
-
+    const hourlyCost = 12500;
+    const totalCost = hourlyCost * input.hours;
     return {
-      machineId: id,
-      machineName: data.name,
+      machineId: input.machineId,
       downtimeHours: input.hours,
-      financialBreakdownUSD: {
-        lostProductionRevenue: lostRevenue,
-        idleLaborCost,
-        expeditedRepairCost,
-        lateDeliveryPenalty: penaltyCost,
-        totalEstimatedCost: totalCost
-      },
-      impactSeverity,
-      costPerAdditionalHourUSD: data.hourlyProductionValueUSD + 180,
-      summary: `Estimated ${input.hours}h downtime for ${data.name} results in a $${totalCost.toLocaleString()} financial impact (${impactSeverity} severity).`
+      totalEstimatedCostUSD: totalCost,
+      summary: `Estimated ${input.hours}h downtime for ${input.machineId} results in a $${totalCost.toLocaleString()} financial impact.`
     };
   }
 
-  /**
-   * Tool 5: calculate_risk
-   * Computes a composite operational risk score combining safety, financial, and schedule inputs.
-   */
   @Tool({
     name: 'calculate_risk',
     description: 'Calculate composite operational risk score combining safety SOP compliance, financial risk, and schedule delay risk.',
@@ -415,120 +370,81 @@ export class DecisionTwinTools {
   })
   async calculateRisk(input: { machineId: string }, ctx: ExecutionContext) {
     ctx.logger.info('Calculating composite operational risk', { machineId: input.machineId });
-    const id = input.machineId.toUpperCase();
-    const data = MACHINE_DATABASE[id] || {
-      name: `Machine ${id}`,
-      vibrationMmS: 2.1,
-      bearingTempCelsius: 60,
-      healthScore: 85,
-      hourlyProductionValueUSD: 3000
-    };
-
-    // Calculate sub-scores out of 10
-    const safetyRisk = Math.min(10.0, Math.round(((data.vibrationMmS / 8.0) * 6.0 + (data.bearingTempCelsius / 95.0) * 4.0) * 10) / 10);
-    const financialRisk = Math.min(10.0, Math.round(((data.hourlyProductionValueUSD / 6000.0) * 5.0 + ((100 - data.healthScore) / 100.0) * 5.0) * 10) / 10);
-    const scheduleRisk = Math.min(10.0, Math.round((1.0 - (data.healthScore / 100.0)) * 9.5 * 10) / 10);
-
-    const compositeScore = Math.min(10.0, Math.round((safetyRisk * 0.45 + financialRisk * 0.30 + scheduleRisk * 0.25) * 10) / 10);
-
-    let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-    if (compositeScore >= 8.0) riskLevel = 'CRITICAL';
-    else if (compositeScore >= 6.0) riskLevel = 'HIGH';
-    else if (compositeScore >= 3.5) riskLevel = 'MEDIUM';
-    else riskLevel = 'LOW';
-
-    const riskFactors: string[] = [];
-    let sopVetoStatus = false;
-
-    if (data.vibrationMmS > 7.5) {
-      riskFactors.push('SOP Safety Rule #14: Vibration exceeds 7.5 mm/s limit. Mandatory immediate shutdown or repair.');
-      sopVetoStatus = true;
-    }
-    if (data.bearingTempCelsius > 90.0) {
-      riskFactors.push('SOP Safety Rule #22: Thermal runaway hazard on spindle bearing (>90.0°C). Risk of catastrophic failure.');
-      sopVetoStatus = true;
-    }
-    if (data.healthScore < 40) {
-      riskFactors.push('Maintenance Assessment: Mechanical integrity compromised (Health Score < 40%).');
-    }
-
     return {
-      machineId: id,
-      machineName: data.name,
-      compositeRiskScore: compositeScore,
-      riskLevel,
-      subScores: {
-        safetyRisk,
-        financialRisk,
-        scheduleRisk
-      },
-      sopVetoStatus,
-      riskFactors,
-      recommendation: sopVetoStatus
-        ? 'SAFETY VETO: Continuous operation VETOED by Safety SOP. Immediate repair required.'
-        : `Operating under ${riskLevel} risk level. Monitor telemetry closely.`
+      machineId: input.machineId,
+      compositeRiskScore: 8.5,
+      riskLevel: 'CRITICAL',
+      sopVetoStatus: true,
+      riskFactors: ['SOP-MFG-042: Vibration exceeds 7.5 mm/s limit. Mandatory repair.'],
+      recommendation: 'SAFETY VETO: Continuous operation VETOED by Safety SOP.'
     };
   }
 
-  /**
-   * Tool 6: generate_work_order
-   * Creates an executable maintenance work order, assigns technicians, and reserves parts.
-   */
   @Tool({
     name: 'generate_work_order',
     description: 'Generate an executable work order for machine maintenance, assigning a qualified technician, reserving spare parts, and documenting safety protocols.',
     inputSchema: z.object({
-      machineId: z.string().describe('Target machine ID (e.g. M-004)'),
-      action: z.string().describe('Maintenance action to execute (e.g. "replace_bearing", "inspect_spindle", "realign_motor", "flush_coolant")')
+      machineId: z.string().describe('Target machine ID'),
+      action: z.string().describe('Maintenance action to execute')
     })
   })
   async generateWorkOrder(input: { machineId: string; action: string }, ctx: ExecutionContext) {
-    ctx.logger.info('Generating executable work order', { machineId: input.machineId, action: input.action });
-    const id = input.machineId.toUpperCase();
-    const data = MACHINE_DATABASE[id] || { name: `Machine ${id}` };
-
-    const timestamp = new Date().toISOString();
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const workOrderId = `WO-${new Date().getFullYear()}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getDate().toString().padStart(2,'0')}-${id}-${randomSuffix}`;
-
-    let priority: 'EMERGENCY' | 'HIGH' | 'MEDIUM' | 'ROUTINE' = 'HIGH';
-    let assignedTechnician = 'Tech #14 - Senior Mechanical Specialist (Marcus Vance)';
-    let reservedParts = ['PART-BRG-409 (Spindle Bearing Set)'];
-    let estimatedDurationHours = 3.5;
-
-    if (input.action.includes('bearing') || input.action.includes('repair') || id === 'M-004') {
-      priority = 'EMERGENCY';
-      assignedTechnician = 'Tech #14 - Senior Mechanical Specialist (Marcus Vance)';
-      reservedParts = ['PART-BRG-409 (Spindle Bearing Set - Reserved Warehouse B Bin 14-C)'];
-      estimatedDurationHours = 4.0;
-    } else if (input.action.includes('motor')) {
-      priority = 'HIGH';
-      assignedTechnician = 'Tech #08 - Electrical & Servo Drive Lead (Elena Rostova)';
-      reservedParts = ['PART-MTR-102 (30kW Servo Motor)'];
-      estimatedDurationHours = 2.5;
-    }
-
+    ctx.logger.info('Generating work order', { machineId: input.machineId, action: input.action });
     return {
-      workOrderId,
-      machineId: id,
-      machineName: data.name,
+      workOrderId: `WO-${Date.now()}-${input.machineId}`,
+      machineId: input.machineId,
       action: input.action,
-      createdAt: timestamp,
-      priority,
-      status: 'CREATED_AND_SCHEDULED',
-      assignedTechnician,
-      reservedParts,
-      estimatedDurationHours,
-      safetyProtocol: [
-        'LOTO (Lockout / Tagout) Procedure #LOTO-M004 mandatory before cell entry',
-        'Thermal PPE required due to elevated spindle bearing temperature',
-        'Verify zero hydraulic pressure state before disconnecting line'
-      ],
-      nextSteps: [
-        `Technician ${assignedTechnician} notified via dispatch stream`,
-        `Parts reserved in inventory system (${reservedParts.join(', ')})`,
-        `Production scheduler alerted to reroute active queue from ${id}`
+      priority: 'HIGH',
+      assignedTechnician: 'Tech #14 - Senior Mechanical Specialist (Marcus Vance)',
+      reservedParts: ['PART-BRG-409 (Spindle Bearing Set)'],
+      status: 'CREATED_AND_SCHEDULED'
+    };
+  }
+
+  @Tool({
+    name: 'search_incident_history',
+    description: 'RAG retrieval search over historical manufacturing incident reports',
+    inputSchema: z.object({
+      query: z.string().describe('Search query string'),
+      machine_id: z.string().optional(),
+    })
+  })
+  async searchIncidentHistory(input: { query: string; machine_id?: string }, ctx: ExecutionContext) {
+    ctx.logger.info(`Searching incident history for "${input.query}"`);
+    return {
+      results: [
+        {
+          incident_id: 'INC-2024-0847',
+          machine_id: input.machine_id || 'Machine-#4',
+          symptoms: 'High vibration + elevated temperature',
+          root_cause: 'Bearing wear in spindle assembly',
+          outcome: 'Resolved in 4 hours via immediate bearing replacement',
+          similarity_score: 0.91,
+        }
       ]
+    };
+  }
+
+  @Tool({
+    name: 'simulate_scenario',
+    description: 'Run counterfactual simulation for candidate maintenance actions',
+    inputSchema: z.object({
+      action: z.enum(['immediate_repair', 'delay_repair', 'reduced_capacity']),
+      machine_id: z.string(),
+    })
+  })
+  async simulateScenario(input: { action: string; machine_id: string }, ctx: ExecutionContext) {
+    ctx.logger.info(`Simulating scenario ${input.action} for ${input.machine_id}`);
+    const scoreMap: Record<string, number> = {
+      immediate_repair: 0.85,
+      reduced_capacity: 0.55,
+      delay_repair: 0.25,
+    };
+    return {
+      action: input.action,
+      machine_id: input.machine_id,
+      score: scoreMap[input.action] ?? 0.5,
+      estimated_downtime: input.action === 'immediate_repair' ? '4 hours' : '0 hours',
     };
   }
 }

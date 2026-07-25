@@ -4,7 +4,6 @@ import { SystemHealthCheck } from './health/system.health.js';
 
 /**
  * Root Application Module for Decision Twin MCP Server
- * 
  * Registers the Decision Twin manufacturing tools, resources, and prompts.
  */
 @McpApp({
@@ -25,11 +24,7 @@ import { SystemHealthCheck } from './health/system.health.js';
     DecisionTwinModule
   ],
   providers: [
-    // Health Checks
     SystemHealthCheck,
   ]
 })
 export class AppModule {}
-
-
-

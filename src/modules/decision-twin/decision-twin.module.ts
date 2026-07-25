@@ -5,7 +5,8 @@ import { DecisionTwinPrompts } from './decision-twin.prompts.js';
 
 @Module({
   name: 'decision-twin',
-  description: 'Decision Twin MCP module for manufacturing operations, telemetry, risk calculation, and work orders',
-  controllers: [DecisionTwinTools, DecisionTwinResources, DecisionTwinPrompts]
+  description: 'Multi-Agent Manufacturing Decision Twin Module',
+  controllers: [DecisionTwinTools, DecisionTwinResources, DecisionTwinPrompts],
+  providers: [DecisionTwinTools, DecisionTwinResources, DecisionTwinPrompts]
 })
 export class DecisionTwinModule {}

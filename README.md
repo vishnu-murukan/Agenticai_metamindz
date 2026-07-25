@@ -1,43 +1,33 @@
-# Decision Twin — MCP Server (NitroStack TypeScript)
+# Decision Twin — Multi-Agent MCP System (TypeScript/NitroStack)
 
-> **An Agentic AI Operating System for Manufacturing Decisions**  
+> **An Agentic AI Operating System for Manufacturing & Industry 4.0**  
 > Built for the NitroStack × Amrita University Hackathon using the official **NitroStack TypeScript SDK (`@nitrostack/core`)**.
 
 ---
 
 ## 📌 Project Overview
 
-**Decision Twin** models how a manufacturing plant makes operational decisions. Rather than relying on a single general-purpose assistant, Decision Twin coordinates specialized AI agents (Sensor, Maintenance, Inventory, Finance, Safety, Planner) that gather evidence, query precedent, calculate operational risk, and issue executable work orders.
-
-This project implements the core **Model Context Protocol (MCP) Server** using the official **NitroStack TypeScript SDK**.
+**Decision Twin** models how a manufacturing plant makes operational decisions. When an anomaly occurs (e.g. sensor overheating, high vibration, quality deviation), Decision Twin dynamically coordinates a team of 12 specialized AI agents (Planner, Plant Manager, Sensor, Maintenance, Inventory, Finance, Devil's Advocate, Safety, Risk, Quality, Scenario Simulation) to gather evidence, query precedent, calculate operational risk, evaluate counterfactuals, and generate executable work orders.
 
 ---
 
 ## 🏗️ System Architecture
 
-The MCP Server exposes tools, resources, and prompts organized across 5 agentic capabilities:
+```
+Event → PlannerAgent → PlantManager(dispatch) → [Sub-Agents] → PlantManager(converge) → Executable Decision
+                              ↑                       |
+                              └───────────────────────┘
+                                   (dispatch loop)
+```
 
-```
-                          ┌───────────────────────────┐
-                          │   Plant Manager Agent     │
-                          └─────────────┬─────────────┘
-                                        │
-             ┌──────────────────────────┼──────────────────────────┐
-             ▼                          ▼                          ▼
-   ┌───────────────────┐      ┌───────────────────┐      ┌───────────────────┐
-   │ Tool-Use Layer    │      │ Reflection/Safety │      │ Memory & Resources│
-   ├───────────────────┤      ├───────────────────┤      ├───────────────────┤
-   │ get_sensor_data   │      │ calculate_risk    │      │ plant/sensor-     │
-   │ check_machine_    │      │ (SOP Veto logic)  │      │ overview          │
-   │ health            │      └───────────────────┘      │ sop/safety-rules  │
-   │ check_inventory   │                                 └───────────────────┘
-   │ estimate_downtime_│      ┌───────────────────┐
-   │ cost              │      │ Executable Output │
-   └───────────────────┘      ├───────────────────┤
-                              │ generate_work_    │
-                              │ order             │
-                              └───────────────────┘
-```
+### Agents (12 total across 5 layers)
+
+| Layer | Agents | Function |
+| :--- | :--- | :--- |
+| **Planning** | PlannerAgent, PlantManagerAgent | Dynamic goal decomposition & phase-based meta-dispatch |
+| **Evidence** | Sensor, Maintenance, Memory, Production, Inventory, Finance | Autonomous tool execution & blackboard evidence collection |
+| **Reflection** | Devil's Advocate, SafetyAgent, RiskAgent | Self-critique challenge loop, composite risk, **SOP Safety Veto** |
+| **Simulation** | ScenarioSimulationAgent, QualityAgent | Counterfactual action scoring & downstream quality defect risk |
 
 ---
 
@@ -47,12 +37,36 @@ All tools are implemented in [`src/modules/decision-twin/decision-twin.tools.ts`
 
 | Tool Name | Parameters | Description |
 | :--- | :--- | :--- |
-| **`get_sensor_data`** | `machineId: string` | Fetches real-time telemetry (`temp`, `vibration`, `bearingTemp`, `pressure`, `RPM`) & flags baseline anomaly thresholds (e.g. `M-004` high vibration 8.4 mm/s). |
-| **`check_machine_health`** | `machineId: string` | Evaluates maintenance-derived health score (0-100), status levels (`Good`, `Fair`, `Degraded`, `Critical`), component wear breakdown, and action recommendations. |
-| **`check_inventory`** | `partId: string` | Checks spare parts stock levels, warehouse bin locations (e.g. `Warehouse B - Bin 14-C`), reorder thresholds, unit costs ($), and lead times. |
-| **`estimate_downtime_cost`** | `machineId: string`, `hours: number` | Computes financial downtime projections (lost production revenue, idle labor, expedited repair fees, SLA late penalties). |
+| **`run_decision_twin_orchestrator`** | `machine_id`, `event_type`, `vibration_level`, `temperature`, `pressure` | Triggers the complete 12-agent Decision Twin orchestrator lifecycle. |
+| **`get_sensor_data`** | `machineId: string` | Fetches real-time telemetry (`temp`, `vibration`, `bearingTemp`, `pressure`, `RPM`) & flags baseline anomaly thresholds. |
+| **`check_machine_health`** | `machineId: string` | Evaluates maintenance-derived health score (0-100), component wear breakdown, and action recommendations. |
+| **`check_inventory`** | `partId: string` | Checks spare parts stock levels, warehouse bin locations (e.g. `Warehouse B - Bin 14-C`), reorder thresholds, and lead times. |
+| **`estimate_downtime_cost`** | `machineId: string`, `hours: number` | Computes financial downtime projections (lost production revenue, idle labor, expedited repair fees, SLA penalties). |
 | **`calculate_risk`** | `machineId: string` | Calculates composite operational risk score (0.0 to 10.0 scale) combining safety, financial, and schedule impact. Enforces **SOP Safety Rule Vetoes**. |
 | **`generate_work_order`** | `machineId: string`, `action: string` | Generates an executable maintenance work order with priority levels, assigned technician, reserved parts, and Lockout/Tagout (LOTO) safety protocols. |
+| **`search_incident_history`** | `query: string` | RAG retrieval search over historical manufacturing incident reports. |
+| **`simulate_scenario`** | `action: string`, `machineId: string` | Counterfactual scenario scoring for candidate maintenance actions. |
+
+---
+
+## ⚙️ Quick Start
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Run TypeScript Multi-Agent Orchestrator Demo (Machine #4 Anomaly)
+npx tsx test-demo.ts
+
+# 3. Run MCP Tools verification test
+npx tsx test-tools.ts
+
+# 4. Start local NitroStack MCP Server (dev mode)
+npm run dev
+
+# 5. Build for production & deployment
+npm run build
+```
 
 ---
 
@@ -64,76 +78,26 @@ All tools are implemented in [`src/modules/decision-twin/decision-twin.tools.ts`
 │   ├── app.module.ts              # Root NitroStack application module
 │   ├── index.ts                   # MCP server entry point
 │   ├── health/                    # System health checks
+│   ├── reflection_memory/         # Reflection & Memory module
 │   └── modules/
 │       └── decision-twin/
-│           ├── decision-twin.module.ts     # DecisionTwinModule definition
-│           ├── decision-twin.tools.ts      # 6 MCP @Tool definitions
+│           ├── decision-twin.state.ts        # Shared blackboard state interfaces
+│           ├── decision-twin.planner.ts      # PlannerAgent node
+│           ├── decision-twin.plant-manager.ts# PlantManager dispatch & convergence nodes
+│           ├── decision-twin.sub-agents.ts   # 11 evidence/reflection/simulation sub-agents
+│           ├── decision-twin.orchestrator.ts # Orchestrator state machine engine
+│           ├── decision-twin.tools.ts      # NitroStack @Tool definitions
 │           ├── decision-twin.resources.ts  # Plant sensor & SOP @Resource definitions
 │           └── decision-twin.prompts.ts    # Anomaly investigation @Prompt definitions
-├── dist/                          # Compiled TypeScript production bundle
-├── test-tools.ts                  # Verification test script
+├── test-demo.ts                   # Orchestrator demo runner
+├── test-tools.ts                  # Tools test runner
 ├── package.json                   # Dependencies (@nitrostack/core, zod)
 └── tsconfig.json                  # TypeScript configuration
 ```
 
 ---
 
-## ⚙️ Environment Setup & Installation
-
-### Prerequisites
-- **Node.js**: v18+ (v20.x recommended)
-- **Git**: Installed & configured
-- **Package Manager**: `npm` or `pnpm`
-
-### Installation Steps
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/vishnu-murukan/metamindz_hackathon_agenticai.git
-   cd metamindz_hackathon_agenticai
-   git checkout feat/mcp-tools
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Verify MCP Tools locally**:
-   ```bash
-   npx tsx test-tools.ts
-   ```
-
-4. **Build the production bundle**:
-   ```bash
-   npm run build
-   ```
-
-5. **Start the MCP Server**:
-   ```bash
-   npm start
-   ```
-
----
-
-## 💻 Visual Testing with NitroStudio
-
-1. Download & install [NitroStudio Desktop IDE](https://nitrostack.ai/studio).
-2. Open NitroStudio -> Click **Add Server** -> Select **Nitro Project**.
-3. Point to this directory (`Metamindz`).
-4. Explore and execute tools interactively under **App -> Tools** in NitroStudio Canvas!
-
----
-
-## ☁️ Deployment on NitroCloud
-
-This server is prepared for one-click deployment on **NitroCloud**:
-1. Connect your repository on [NitroCloud Dashboard](https://nitrocloud.ai).
-2. Enable Auto-Deploy on branch `feat/mcp-tools`.
-
----
-
 ## 📜 Compliance with Hackathon Guidelines
 - ✅ **100% TypeScript**: Built exclusively with the official **NitroStack TypeScript SDK (`@nitrostack/core`)**.
-- ✅ **Zero Secrets/Env files in Git**: Strictly clean `.gitignore`.
-- ✅ **Tested & Verified**: Complete test suite passed locally before pushing.
+- ✅ **Zero Secrets/Env files in Git**: Clean `.gitignore`.
+- ✅ **Tested & Verified**: Production bundle compiled and tested cleanly.

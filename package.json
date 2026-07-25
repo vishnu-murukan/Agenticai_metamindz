@@ -1,9 +1,9 @@
 {
-  "name": "metamindz-hackathon-agenticai",
+  "name": "decision-twin",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Decision Twin MCP Server & Agentic Operating System",
+  "description": "Decision Twin MCP Server & Multi-Agent Manufacturing Decision System",
   "scripts": {
     "dev": "nitrostack-cli dev",
     "build": "nitrostack-cli build",
@@ -13,6 +13,7 @@
     "install:all": "nitrostack-cli install",
     "test": "vitest run",
     "demo": "tsx run_demo_transcript.ts",
+    "demo:orchestrator": "tsx test-demo.ts",
     "widget": "npm --prefix src/widgets"
   },
   "dependencies": {
@@ -28,5 +29,8 @@
     "typescript": "^5.3.3",
     "vitest": "^1.2.0"
   },
-  "author": "Decision Twin Team"
+  "author": "MetaMindz",
+  "nitrostack": {
+    "skillsVersion": "1.0.0"
+  }
 }
