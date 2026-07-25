@@ -4,11 +4,12 @@ import { SystemHealthCheck } from './health/system.health.js';
 
 /**
  * Root Application Module for Decision Twin MCP Server
+ * Registers the Decision Twin manufacturing tools, resources, and prompts.
  */
 @McpApp({
   module: AppModule,
   server: {
-    name: 'decision-twin-server',
+    name: 'decision-twin-mcp-server',
     version: '1.0.0'
   },
   logging: {
@@ -17,7 +18,7 @@ import { SystemHealthCheck } from './health/system.health.js';
 })
 @Module({
   name: 'app',
-  description: 'Root application module for Decision Twin',
+  description: 'Decision Twin MCP Root Application Module',
   imports: [
     ConfigModule.forRoot(),
     DecisionTwinModule
