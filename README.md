@@ -136,7 +136,7 @@ All MCP elements are implemented using official `@nitrostack/core` decorators wi
 
 ---
 
-## 🎨 Interactive Next.js Glassmorphic UI Control Dashboard (`@Widget`)
+## 🎨 UI Control Dashboard (`@Widget`)
 
 Decision Twin includes a custom Next.js dark-mode control dashboard rendered inside **NitroStack Studio** and Claude Desktop:
 
@@ -203,16 +203,5 @@ npm start
 
 ---
 
-## 🏆 Hackathon Compliance & Review Verification
-
-- [x] **100% Type-Safe TypeScript**: Built with official **NitroStack TypeScript SDK (`@nitrostack/core`)**.
-- [x] **MCP Protocol 2025-06-18 Compliant**: Native Streamable HTTP (`/mcp`) & Legacy SSE (`/sse`).
-- [x] **Interactive UI Widget**: 5-tab glassmorphic dashboard auto-registered over `@Widget`.
-- [x] **Multi-Agent Negotiation**: 12 specialized agents, 5 pillars, self-critique challenge loops, and SOP safety vetoes.
-- [x] **Data-Source Priority Engine**: Configurable `user_input` / `live_sensor` / `merge` policies with full conflict transparency.
-- [x] **Empirically Differentiated Outputs**: Verified opposite outcomes between nominal (`continue_normal_operation`, 95% conf, $50k cost) and critical (`immediate_repair`, 85% conf, $192k cost) runs.
-- [x] **NitroCloud Container Ready**: Non-pruned CLI binaries, `0.0.0.0` ingress binding, and instant container boot.
-
----
 
 ### 🌐 Live Endpoint: `https://agent-nexus-6a6560aa-metamindz-amrita-university-coimbatore.app.nitrocloud.ai/mcp`
