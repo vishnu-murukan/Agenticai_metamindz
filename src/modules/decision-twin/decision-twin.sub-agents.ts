@@ -141,12 +141,21 @@ export async function maintenanceAgent(state: DecisionTwinState): Promise<Partia
     summary: `Health=${health.healthScore}% (check_machine_health), P(failure)=${(failureProbability * 100).toFixed(0)}%, Rec: ${health.recommendedAction}`,
   };
 
-  const proposals: Proposal[] = needsImmediate ? [{
+  const vib = event.vibration_level !== undefined ? Number(event.vibration_level) : 1.2;
+  const temp = event.temperature !== undefined ? Number(event.temperature) : 48.2;
+  const isHealthy = vib <= 3.5 && temp <= 60.0;
+  const isCritical = vib > 7.5 || temp > 85.0;
+
+  const proposals: Proposal[] = [{
     source: 'maintenance_agent',
-    action: 'immediate_repair',
-    reason: `check_machine_health reports ${health.healthScore}% health (below critical threshold 40%). Failure probability ${(failureProbability * 100).toFixed(0)}%.`,
-    confidence: 0.75,
-  }] : [];
+    action: isHealthy ? 'continue_normal_operation' : isCritical ? 'immediate_repair' : 'reduced_capacity',
+    reason: isHealthy
+      ? `Machine operating nominally (health=${(healthScore * 100).toFixed(0)}%). Continue normal operation.`
+      : isCritical
+      ? `Health ${(healthScore * 100).toFixed(0)}% below critical threshold (40%). Immediate repair required.`
+      : `Moderate degradation detected (health=${(healthScore * 100).toFixed(0)}%). Recommend operating at reduced capacity.`,
+    confidence: isHealthy ? 0.95 : isCritical ? 0.85 : 0.75,
+  }];
 
   return {
     blackboard: mergeBB(state, 'maintenance_agent', findings),
