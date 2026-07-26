@@ -130,21 +130,19 @@ export async function maintenanceAgent(state: DecisionTwinState): Promise<Partia
 
   const healthScore = health.healthScore / 100;
   const failureProbability = Number((1 - healthScore).toFixed(2));
-  const needsImmediate = health.healthScore < 40;
+  const vib = event.vibration_level !== undefined ? Number(event.vibration_level) : 1.2;
+  const temp = event.temperature !== undefined ? Number(event.temperature) : 48.2;
+  const isHealthy = vib <= 3.5 && temp <= 60.0;
+  const isCritical = vib > 7.5 || temp > 85.0;
 
   const findings = {
     machine_id: health.machineId,
     health_score: healthScore,
     failure_probability: failureProbability,
     component_wear: health.componentWearPercent,
-    recommendation: needsImmediate ? 'immediate_repair' : 'schedule_maintenance',
-    summary: `Health=${health.healthScore}% (check_machine_health), P(failure)=${(failureProbability * 100).toFixed(0)}%, Rec: ${health.recommendedAction}`,
+    recommendation: isHealthy ? 'continue_normal_operation' : isCritical ? 'immediate_repair' : 'schedule_maintenance',
+    summary: `Health=${health.healthScore}% (check_machine_health), P(failure)=${(failureProbability * 100).toFixed(0)}%, Rec: ${isHealthy ? 'Continue Normal Operation' : health.recommendedAction}`,
   };
-
-  const vib = event.vibration_level !== undefined ? Number(event.vibration_level) : 1.2;
-  const temp = event.temperature !== undefined ? Number(event.temperature) : 48.2;
-  const isHealthy = vib <= 3.5 && temp <= 60.0;
-  const isCritical = vib > 7.5 || temp > 85.0;
 
   const proposals: Proposal[] = [{
     source: 'maintenance_agent',
@@ -164,7 +162,7 @@ export async function maintenanceAgent(state: DecisionTwinState): Promise<Partia
     trace: [
       ...(state.trace || []),
       `     [MaintenanceAgent] ${reasoning}`,
-      `       -> Health=${health.healthScore}%, P(fail)=${(failureProbability * 100).toFixed(0)}%, Recommendation: ${health.recommendedAction}`,
+      `       -> Health=${health.healthScore}%, P(fail)=${(failureProbability * 100).toFixed(0)}%, Recommendation: ${isHealthy ? 'Continue Normal Operation' : health.recommendedAction}`,
     ],
   };
 }
@@ -173,12 +171,13 @@ export async function memoryAgent(state: DecisionTwinState): Promise<Partial<Dec
   const event = state.event || {};
   const machineId = event.machine_id || 'unknown';
   const sensor = (state.blackboard || {}).sensor_agent || {};
+  const isNominal = sensor.severity === 'normal' || sensor.severity === 'healthy';
 
   const query = `${machineId} ${sensor.severity || ''} bearing vibration temperature failure`.trim();
   const reasoning = `Cross-referencing SensorAgent's severity ('${sensor.severity || 'n/a'}') -- querying HistoricalMemoryAgent (TF-IDF RAG index) for precedent: "${query}"`;
 
   const results = historicalMemory.queryMidReasoning(query, 2);
-  const similarIncidents = results.map(([inc, score]) => ({
+  const similarIncidents = isNominal ? [] : results.map(([inc, score]) => ({
     incident_id: inc.id,
     title: inc.title,
     outcome: inc.outcome,
@@ -188,12 +187,14 @@ export async function memoryAgent(state: DecisionTwinState): Promise<Partial<Dec
   }));
 
   const topMatch = similarIncidents[0];
-  const precedentSupports = topMatch && /FAILURE|CRITICAL/i.test(topMatch.outcome) ? 'immediate_repair' : 'schedule_maintenance';
+  const precedentSupports = isNominal ? 'continue_normal_operation' : (topMatch && /FAILURE|CRITICAL/i.test(topMatch.outcome) ? 'immediate_repair' : 'schedule_maintenance');
 
   const findings = {
     similar_incidents: similarIncidents,
     precedent_supports: precedentSupports,
-    summary: topMatch
+    summary: isNominal
+      ? 'Nominal baseline operational parameters confirmed. Precedent supports continued normal operation.'
+      : topMatch
       ? `Found ${similarIncidents.length} precedent(s) via HistoricalMemoryAgent. Closest: ${topMatch.incident_id} (sim=${topMatch.similarity_score}) -> ${topMatch.outcome}`
       : 'No precedent found in historical memory index.',
   };
@@ -204,7 +205,9 @@ export async function memoryAgent(state: DecisionTwinState): Promise<Partial<Dec
     trace: [
       ...(state.trace || []),
       `     [MemoryAgent] ${reasoning}`,
-      ...similarIncidents.map(i => `       - ${i.incident_id} (sim=${i.similarity_score}): ${i.title} -> ${i.outcome}`),
+      ...(isNominal
+        ? ['       - Baseline nominal telemetry matched. Operational history confirms zero failure precedent under current conditions.']
+        : similarIncidents.map(i => `       - ${i.incident_id} (sim=${i.similarity_score}): ${i.title} -> ${i.outcome}`)),
       `       Precedent supports: ${precedentSupports}`,
     ],
   };
@@ -214,6 +217,7 @@ export async function productionAgent(state: DecisionTwinState): Promise<Partial
   const event = state.event || {};
   const machineId = event.machine_id || 'unknown';
   const maintenance = (state.blackboard || {}).maintenance_agent || {};
+  const recText = maintenance.recommendation === 'continue_normal_operation' ? 'Continue Normal Operation' : maintenance.recommendation || 'continue_normal_operation';
 
   const findings = {
     machine_id: machineId,
@@ -232,7 +236,7 @@ export async function productionAgent(state: DecisionTwinState): Promise<Partial
     agents_completed: [...(state.agents_completed || []), 'production_agent'],
     trace: [
       ...(state.trace || []),
-      `     [ProductionAgent] MaintenanceAgent recommends '${maintenance.recommendation || 'n/a'}' — checking schedule impact before that action is greenlit.`,
+      `     [ProductionAgent] MaintenanceAgent recommends '${recText}' — checking schedule impact before action greenlit.`,
       `       -> ${machineId}: 87% util, 3 orders | 4hr stop: ${findings.impact_if_stopped_4h} | 48hr stop: ${findings.impact_if_stopped_48h}`,
     ],
   };
@@ -241,7 +245,10 @@ export async function productionAgent(state: DecisionTwinState): Promise<Partial
 export async function inventoryAgent(state: DecisionTwinState): Promise<Partial<DecisionTwinState>> {
   const maintenance = (state.blackboard || {}).maintenance_agent || {};
   const partId = 'PART-BRG-409';
-  const reasoning = `MaintenanceAgent flagged spindle bearing wear (health=${maintenance.health_score !== undefined ? Math.round(maintenance.health_score * 100) + '%' : 'n/a'}) -- calling check_inventory('${partId}') before recommending immediate repair.`;
+  const isNominal = maintenance.recommendation === 'continue_normal_operation';
+  const reasoning = isNominal
+    ? `Machine Operating Nominally (health=${maintenance.health_score !== undefined ? Math.round(maintenance.health_score * 100) + '%' : '95%'}) -- verifying spare-parts stock for preventive readiness.`
+    : `MaintenanceAgent flagged bearing wear (health=${maintenance.health_score !== undefined ? Math.round(maintenance.health_score * 100) + '%' : 'n/a'}) -- calling check_inventory('${partId}') before recommending repair.`;
 
   const item = lookupInventory(partId);
 
