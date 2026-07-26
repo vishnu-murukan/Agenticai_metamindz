@@ -78,40 +78,139 @@ function buildModelProposal(state: DecisionTwinState, round: number): RM.Proposa
 export async function sensorAgent(state: DecisionTwinState): Promise<Partial<DecisionTwinState>> {
   const event = state.event || {};
   const machineId = event.machine_id || 'unknown';
-  const reasoning = `Event reported vibration=${event.vibration_level ?? 'n/a'}, temp=${event.temperature ?? 'n/a'}, pressure=${event.pressure ?? 'n/a'} -- calling get_sensor_data('${machineId}') to confirm against live telemetry.`;
+  const priority: 'user_input' | 'live_sensor' | 'merge' =
+    state.data_source_priority ||
+    (process.env.DATA_SOURCE_PRIORITY as any) ||
+    'user_input'; // Default to user_input (Demo Mode)
 
-  const sensorData = lookupSensorData(machineId, {
-    vibration_level: event.vibration_level,
-    temperature: event.temperature,
-    pressure: event.pressure,
-  });
+  // 1. Fetch pure live sensor baseline (without overrides)
+  const sensorData = lookupSensorData(machineId);
 
-  const vibration = sensorData.telemetry.vibration_mm_s;
-  const temperature = sensorData.telemetry.temperature_celsius;
-  const pressure = sensorData.telemetry.hydraulic_pressure_bar;
+  const liveTemp = sensorData.telemetry.temperature_celsius;
+  const liveVib = sensorData.telemetry.vibration_mm_s;
+  const livePress = sensorData.telemetry.hydraulic_pressure_bar;
+  const liveBearingWear = (sensorData.telemetry as any).bearing_wear_percent ?? 45;
+
+  const userTemp = event.temperature ?? event.temp ?? event.temperature_celsius;
+  const userVib = event.vibration_level ?? event.vibration ?? event.vibration_mm_s;
+  const userPress = event.pressure ?? event.hydraulic_pressure_bar;
+  const userBearingWear = event.bearing_wear ?? event.bearing_wear_percent;
+
+  const conflicts: any[] = [];
+  const dataSources: Record<string, any> = {};
+
+  const reconcileField = (
+    fieldName: string,
+    userVal: any,
+    liveVal: any,
+    unit: string = ''
+  ) => {
+    const hasUser = userVal !== undefined && userVal !== null && userVal !== '';
+    const isDifferent = hasUser && Number(userVal) !== Number(liveVal);
+
+    let selectedVal = liveVal;
+    let selectedSource: 'user_input' | 'live_sensor' | 'merge' = 'live_sensor';
+    let reason = '';
+
+    if (!hasUser) {
+      selectedVal = liveVal;
+      selectedSource = 'live_sensor';
+      reason = `No user input provided for ${fieldName}; defaulting to live sensor telemetry (${liveVal}${unit}).`;
+    } else if (isDifferent) {
+      if (priority === 'user_input') {
+        selectedVal = userVal;
+        selectedSource = 'user_input';
+        reason = `Configured data-source policy is user_input (Demo Mode). Prioritizing user-provided telemetry (${userVal}${unit}) over live sensor baseline (${liveVal}${unit}).`;
+      } else if (priority === 'live_sensor') {
+        selectedVal = liveVal;
+        selectedSource = 'live_sensor';
+        reason = `Configured data-source policy is live_sensor (Production Mode). Deployment is configured for live telemetry; using live sensor reading (${liveVal}${unit}) over user prompt (${userVal}${unit}).`;
+      } else {
+        selectedVal = Math.max(Number(userVal), Number(liveVal));
+        selectedSource = 'merge';
+        reason = `Configured data-source policy is merge (Conservative Strategy). Selected worst-case value (${selectedVal}${unit}) between user (${userVal}${unit}) and live sensor (${liveVal}${unit}).`;
+      }
+
+      conflicts.push({
+        field: fieldName,
+        user_value: userVal,
+        live_sensor_value: liveVal,
+        selected_source: selectedSource,
+        selected_value: selectedVal,
+        reason,
+      });
+    } else {
+      selectedVal = userVal;
+      selectedSource = 'user_input';
+      reason = `User input (${userVal}${unit}) matches live sensor telemetry (${liveVal}${unit}).`;
+    }
+
+    dataSources[fieldName] = {
+      field: fieldName,
+      value: selectedVal,
+      source: selectedSource,
+      has_conflict: isDifferent,
+      conflict_detail: isDifferent
+        ? `User: ${userVal}${unit} vs Live Sensor: ${liveVal}${unit}`
+        : undefined,
+    };
+
+    return selectedVal;
+  };
+
+  const temperature = reconcileField('temperature', userTemp, liveTemp, '°C');
+  const vibration = reconcileField('vibration', userVib, liveVib, ' mm/s');
+  const pressure = reconcileField('pressure', userPress, livePress, ' bar');
+  const bearingWear = reconcileField('bearing_wear', userBearingWear, liveBearingWear, '%');
 
   const anomalies = [...sensorData.anomalies];
+  if (vibration > 7.5 && !anomalies.includes('Severe vibration anomaly detected')) {
+    anomalies.push('Severe vibration anomaly detected');
+  }
+  if (temperature > 85 && !anomalies.includes('Thermal spike detected')) {
+    anomalies.push('Thermal spike detected');
+  }
 
   const severity = (vibration > 7.5 || temperature > 85) ? 'critical' :
                    (vibration > 3.5 || temperature > 60) ? 'high' :
                    anomalies.length > 0 ? 'moderate' : 'normal';
 
+  const policyName = priority === 'user_input' ? 'user_input (Demo Mode)' : priority === 'live_sensor' ? 'live_sensor (Production Mode)' : 'merge (Conservative Strategy)';
+
+  const conflictSummaryStr = conflicts.length > 0
+    ? `${conflicts.length} field conflict(s) detected under Policy: ${policyName}. [${conflicts.map(c => `${c.field}: User=${c.user_value} vs Live=${c.live_sensor_value} -> Used ${c.selected_source} (${c.selected_value})`).join('; ')}]`
+    : `No field conflicts detected. Telemetry reconciled via ${policyName}.`;
+
   const findings = {
     machine_id: sensorData.machineId,
+    data_source_policy: policyName,
+    conflicts,
+    data_sources: dataSources,
     anomalies,
     severity,
-    readings: { vibration, temperature, pressure },
+    readings: { vibration, temperature, pressure, bearingWear },
     status: sensorData.status,
-    summary: `${anomalies.length} anomalies detected (live get_sensor_data telemetry), severity: ${severity}`,
+    summary: `${anomalies.length} anomalies detected. Reconciled Telemetry: Vib=${vibration}mm/s, Temp=${temperature}°C, Press=${pressure}bar. ${conflictSummaryStr}`,
   };
+
+  const conflictTrace = conflicts.length > 0
+    ? [
+        `       [DATA RECONCILIATION & CONFLICT RESOLUTION] Policy: ${policyName}`,
+        ...conflicts.map(c => `         ⚠️ Conflict in '${c.field}': User=${c.user_value} | Live Sensor=${c.live_sensor_value} -> TRUSTED: ${c.selected_source} (${c.selected_value})`),
+        ...conflicts.map(c => `            Reason: ${c.reason}`),
+      ]
+    : [`       [DATA RECONCILIATION] Policy: ${policyName} (No field conflicts)`];
 
   return {
     blackboard: mergeBB(state, 'sensor_agent', findings),
+    conflicts,
+    data_sources: dataSources,
     agents_completed: [...(state.agents_completed || []), 'sensor_agent'],
     trace: [
       ...(state.trace || []),
-      `     [SensorAgent] ${reasoning}`,
-      `       -> ${sensorData.name} (${sensorData.location}): ${anomalies.length} anomalies | Severity: ${severity.toUpperCase()}`,
+      `     [SensorAgent] Reconciling sensor data for '${machineId}' under Policy: ${policyName}`,
+      ...conflictTrace,
+      `       -> Reconciled Telemetry: Vib=${vibration} mm/s, Temp=${temperature}°C, Press=${pressure} bar | Severity: ${severity.toUpperCase()}`,
       ...anomalies.map((a: string) => `       - ${a}`),
     ],
   };
@@ -121,17 +220,20 @@ export async function maintenanceAgent(state: DecisionTwinState): Promise<Partia
   const event = state.event || {};
   const machineId = event.machine_id || 'unknown';
   const sensor = (state.blackboard || {}).sensor_agent || {};
-  const reasoning = `SensorAgent flagged severity='${sensor.severity || 'unknown'}' -- calling check_machine_health('${machineId}') for maintenance-derived health score.`;
+  const readings = sensor.readings || {};
+
+  const vib = readings.vibration !== undefined ? Number(readings.vibration) : (event.vibration_level !== undefined ? Number(event.vibration_level) : 1.2);
+  const temp = readings.temperature !== undefined ? Number(readings.temperature) : (event.temperature !== undefined ? Number(event.temperature) : 48.2);
+
+  const reasoning = `SensorAgent flagged severity='${sensor.severity || 'unknown'}' (reconciled temp=${temp}°C, vib=${vib}mm/s) -- calling check_machine_health('${machineId}') for maintenance-derived health score.`;
 
   const health = lookupMachineHealth(machineId, {
-    vibration_level: event.vibration_level,
-    temperature: event.temperature,
+    vibration_level: vib,
+    temperature: temp,
   });
 
   const healthScore = health.healthScore / 100;
   const failureProbability = Number((1 - healthScore).toFixed(2));
-  const vib = event.vibration_level !== undefined ? Number(event.vibration_level) : 1.2;
-  const temp = event.temperature !== undefined ? Number(event.temperature) : 48.2;
   const isHealthy = vib <= 3.5 && temp <= 60.0;
   const isCritical = vib > 7.5 || temp > 85.0;
 
@@ -141,7 +243,7 @@ export async function maintenanceAgent(state: DecisionTwinState): Promise<Partia
     failure_probability: failureProbability,
     component_wear: health.componentWearPercent,
     recommendation: isHealthy ? 'continue_normal_operation' : isCritical ? 'immediate_repair' : 'schedule_maintenance',
-    summary: `Health=${health.healthScore}% (check_machine_health), P(failure)=${(failureProbability * 100).toFixed(0)}%, Rec: ${isHealthy ? 'Continue Normal Operation' : health.recommendedAction}`,
+    summary: `Health=${health.healthScore}% (check_machine_health based on reconciled telemetry), P(failure)=${(failureProbability * 100).toFixed(0)}%, Rec: ${isHealthy ? 'Continue Normal Operation' : health.recommendedAction}`,
   };
 
   const proposals: Proposal[] = [{
@@ -243,24 +345,70 @@ export async function productionAgent(state: DecisionTwinState): Promise<Partial
 }
 
 export async function inventoryAgent(state: DecisionTwinState): Promise<Partial<DecisionTwinState>> {
+  const event = state.event || {};
   const maintenance = (state.blackboard || {}).maintenance_agent || {};
   const partId = 'PART-BRG-409';
   const isNominal = maintenance.recommendation === 'continue_normal_operation';
+
+  const item = lookupInventory(partId);
+
+  const priority: 'user_input' | 'live_sensor' | 'merge' =
+    state.data_source_priority ||
+    (process.env.DATA_SOURCE_PRIORITY as any) ||
+    'user_input';
+
+  const userInv = event.inventory ?? event.inventory_count;
+  const liveInv = item.availableCount;
+  const hasUserInv = userInv !== undefined && userInv !== null;
+  const isInvConflict = hasUserInv && Number(userInv) !== Number(liveInv);
+
+  let selectedInv = liveInv;
+  let invSource: 'user_input' | 'live_sensor' | 'merge' = 'live_sensor';
+  let invReason = '';
+
+  if (!hasUserInv) {
+    selectedInv = liveInv;
+    invSource = 'live_sensor';
+    invReason = `No user inventory count provided; using ERP warehouse count (${liveInv} units).`;
+  } else if (isInvConflict) {
+    if (priority === 'user_input') {
+      selectedInv = Number(userInv);
+      invSource = 'user_input';
+      invReason = `Configured policy is user_input (Demo Mode). Prioritizing user inventory count (${userInv} units) over ERP stock (${liveInv} units).`;
+    } else if (priority === 'live_sensor') {
+      selectedInv = liveInv;
+      invSource = 'live_sensor';
+      invReason = `Configured policy is live_sensor (Production Mode). Using ERP stock (${liveInv} units) over user input (${userInv} units).`;
+    } else {
+      selectedInv = Math.min(Number(userInv), Number(liveInv));
+      invSource = 'merge';
+      invReason = `Configured policy is merge (Conservative Strategy). Selected lower stock count (${selectedInv} units).`;
+    }
+  } else {
+    selectedInv = Number(userInv);
+    invSource = 'user_input';
+    invReason = `User inventory count (${userInv} units) matches ERP stock.`;
+  }
+
   const reasoning = isNominal
     ? `Machine Operating Nominally (health=${maintenance.health_score !== undefined ? Math.round(maintenance.health_score * 100) + '%' : '95%'}) -- verifying spare-parts stock for preventive readiness.`
     : `MaintenanceAgent flagged bearing wear (health=${maintenance.health_score !== undefined ? Math.round(maintenance.health_score * 100) + '%' : 'n/a'}) -- calling check_inventory('${partId}') before recommending repair.`;
 
-  const item = lookupInventory(partId);
-
   const findings = {
     required_part: item.partName,
     part_id: item.partId,
-    in_stock: item.availableCount > 0,
-    quantity_available: item.availableCount,
+    in_stock: selectedInv > 0,
+    quantity_available: selectedInv,
     location: item.storageLocation,
     lead_time_if_ordered: `${item.leadTimeDays} business days`,
-    summary: `check_inventory: ${item.partName} — ${item.availableCount} unit(s) available at ${item.storageLocation}.`,
+    inventory_source: invSource,
+    has_inventory_conflict: isInvConflict,
+    summary: `check_inventory: ${item.partName} — ${selectedInv} unit(s) available at ${item.storageLocation} (Source: ${invSource}${isInvConflict ? `, Conflict resolved from ${liveInv} ERP stock` : ''}).`,
   };
+
+  const invTrace = isInvConflict
+    ? `       ⚠️ Inventory Conflict: User=${userInv} vs ERP=${liveInv} -> TRUSTED: ${invSource} (${selectedInv} units)`
+    : `       Inventory Count: ${selectedInv} unit(s) (${invSource})`;
 
   return {
     blackboard: mergeBB(state, 'inventory_agent', findings),
@@ -268,7 +416,8 @@ export async function inventoryAgent(state: DecisionTwinState): Promise<Partial<
     trace: [
       ...(state.trace || []),
       `     [InventoryAgent] ${reasoning}`,
-      `       -> ${item.partName}: ${item.availableCount} unit(s) at ${item.storageLocation}, lead time ${item.leadTimeDays}d`,
+      `       -> ${item.partName}: ${selectedInv} unit(s) at ${item.storageLocation}, lead time ${item.leadTimeDays}d`,
+      invTrace,
     ],
   };
 }
@@ -277,12 +426,18 @@ export async function financeAgent(state: DecisionTwinState): Promise<Partial<De
   const event = state.event || {};
   const machineId = event.machine_id || 'unknown';
   const maintenance = (state.blackboard || {}).maintenance_agent || {};
-  const reasoning = `MaintenanceAgent recommendation is '${maintenance.recommendation || 'n/a'}' -- calling estimate_downtime_cost for both the 4h repair-now window and the 48h delay-risk window to quantify the tradeoff.`;
+  const sensor = (state.blackboard || {}).sensor_agent || {};
+  const readings = sensor.readings || {};
 
-  const repairNow = calculateDowntimeCost(machineId, 4, event.vibration_level, event.temperature);
-  const delayed = calculateDowntimeCost(machineId, 48, event.vibration_level, event.temperature);
+  const vib = readings.vibration !== undefined ? Number(readings.vibration) : (event.vibration_level !== undefined ? Number(event.vibration_level) : 1.2);
+  const temp = readings.temperature !== undefined ? Number(readings.temperature) : (event.temperature !== undefined ? Number(event.temperature) : 48.2);
 
-  const severityFactor = Math.max(1.0, ((event.vibration_level ?? 1.2) / 5.0) * ((event.temperature ?? 48.2) / 80.0));
+  const reasoning = `MaintenanceAgent recommendation is '${maintenance.recommendation || 'n/a'}' -- calling estimate_downtime_cost (using reconciled temp=${temp}°C, vib=${vib}mm/s) for both 4h repair-now and 48h delay-risk windows.`;
+
+  const repairNow = calculateDowntimeCost(machineId, 4, vib, temp);
+  const delayed = calculateDowntimeCost(machineId, 48, vib, temp);
+
+  const severityFactor = Math.max(1.0, (vib / 5.0) * (temp / 80.0));
   const delayProbability = Number(Math.min(0.95, 0.05 * severityFactor * 7).toFixed(2));
   const expectedDelayCost = Math.round(delayed.totalEstimatedCostUSD * delayProbability);
 

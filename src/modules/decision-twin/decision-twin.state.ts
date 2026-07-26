@@ -45,11 +45,31 @@ export interface SupervisorNotification {
   requires_approval: boolean;
 }
 
+export interface FieldConflict {
+  field: string;
+  user_value: any;
+  live_sensor_value: any;
+  selected_source: 'user_input' | 'live_sensor' | 'merge';
+  selected_value: any;
+  reason: string;
+}
+
+export interface DataSourceDetail {
+  field: string;
+  value: any;
+  source: 'user_input' | 'live_sensor' | 'merge';
+  has_conflict: boolean;
+  conflict_detail?: string;
+}
+
 export interface FinalDecision {
   chosen_action: string;
   confidence: number;
   reason: string;
   supporting_evidence: Record<string, string>;
+  data_sources_summary?: Record<string, DataSourceDetail>;
+  conflicts_resolved?: FieldConflict[];
+  data_source_policy_applied?: string;
   vetoes: Veto[];
   challenges_addressed: Challenge[];
   agents_consulted: string[];
@@ -60,6 +80,7 @@ export interface FinalDecision {
 export interface DecisionTwinState {
   event: Record<string, any>;
   event_type: 'sensor_anomaly' | 'maintenance_alert' | 'quality_deviation' | string;
+  data_source_priority?: 'user_input' | 'live_sensor' | 'merge';
 
   sub_goals: SubGoal[];
 
@@ -77,6 +98,8 @@ export interface DecisionTwinState {
   vetoes: Veto[];
   challenges: Challenge[];
   final_decision?: FinalDecision;
+  conflicts?: FieldConflict[];
+  data_sources?: Record<string, DataSourceDetail>;
 
   work_orders: WorkOrder[];
   notifications: SupervisorNotification[];

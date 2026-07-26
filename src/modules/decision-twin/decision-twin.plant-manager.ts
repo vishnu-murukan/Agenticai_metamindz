@@ -136,6 +136,11 @@ export function convergeNode(state: DecisionTwinState): Partial<DecisionTwinStat
   const completed = state.agents_completed || [];
   const event = state.event || {};
 
+  const sensorAgentBB = blackboard.sensor_agent || {};
+  const conflicts = state.conflicts || sensorAgentBB.conflicts || [];
+  const dataSources = state.data_sources || sensorAgentBB.data_sources || {};
+  const policyApplied = sensorAgentBB.data_source_policy || state.data_source_priority || 'user_input (Demo Mode)';
+
   const vetoedActions = new Set(vetoes.map(v => v.vetoed_action));
   const viable = proposals.filter(p => !vetoedActions.has(p.action));
 
@@ -158,11 +163,19 @@ export function convergeNode(state: DecisionTwinState): Partial<DecisionTwinStat
       : JSON.stringify(findings);
   }
 
+  const dataSourceLines = Object.values(dataSources).map((ds: any) =>
+    `${ds.field}: ${ds.value} (Source: ${ds.source}${ds.has_conflict ? ` [CONFLICT: ${ds.conflict_detail}]` : ''})`
+  );
+  supportingEvidence["data_sources"] = `Policy: ${policyApplied}. Reconciled Telemetry: ${dataSourceLines.join(' | ')}`;
+
   const finalDecision: FinalDecision = {
     chosen_action: chosen.action,
     confidence: chosen.confidence,
     reason: chosen.reason,
     supporting_evidence: supportingEvidence,
+    data_sources_summary: dataSources,
+    conflicts_resolved: conflicts,
+    data_source_policy_applied: policyApplied,
     vetoes,
     challenges_addressed: challenges,
     agents_consulted: completed,
@@ -186,7 +199,23 @@ export function convergeNode(state: DecisionTwinState): Partial<DecisionTwinStat
     requires_approval: chosen.confidence < 0.8,
   };
 
+  const conflictDisplayLines = conflicts.length > 0
+    ? [
+        `  Conflicts Detected: ${conflicts.length} field(s)`,
+        ...conflicts.map((c: any) => `  - ${c.field}: User=${c.user_value} vs Live=${c.live_sensor_value} -> TRUSTED: ${c.selected_source} (${c.selected_value})`),
+        ...conflicts.map((c: any) => `    Rationale: ${c.reason}`),
+      ]
+    : ['  Conflicts Detected: None (User inputs match sensor telemetry or defaults used)'];
+
   const traceLines = [
+    '\n' + '='.repeat(60),
+    '  DATA SOURCES & RECONCILIATION',
+    '='.repeat(60),
+    `  Configured Policy : ${policyApplied}`,
+    ...conflictDisplayLines,
+    '  Reconciled Telemetry Used for Reasoning:',
+    ...Object.values(dataSources).map((ds: any) => `    • ${ds.field.padEnd(14)}: ${ds.value} (Source: ${ds.source})`),
+    '='.repeat(60),
     '\n' + '='.repeat(60),
     '  PLANT MANAGER — FINAL DECISION',
     '='.repeat(60),

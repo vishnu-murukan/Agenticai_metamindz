@@ -12,17 +12,22 @@ export class DecisionTwinTools {
       machineId: z.string().optional().describe('Alias for machine_id'),
       machine: z.string().optional().describe('Alias for machine_id'),
       event_type: z.enum(['sensor_anomaly', 'maintenance_alert', 'quality_deviation']).optional().default('sensor_anomaly').describe('Type of incoming manufacturing event'),
+      data_source_priority: z.enum(['user_input', 'live_sensor', 'merge']).optional().describe('Configurable policy for resolving conflicts between user-provided inputs and live sensor telemetry. Default: user_input (Demo Mode)'),
+      dataSourcePriority: z.enum(['user_input', 'live_sensor', 'merge']).optional().describe('Alias for data_source_priority'),
       vibration_level: z.number().optional().describe('Vibration reading in mm/s'),
       vibration: z.number().optional().describe('Alias for vibration_level'),
       temperature: z.number().optional().describe('Temperature reading in Celsius'),
       temp: z.number().optional().describe('Alias for temperature'),
       pressure: z.number().optional().describe('Pressure reading in bar'),
+      bearing_wear: z.number().optional().describe('Bearing wear percentage (0-100)'),
+      inventory: z.number().optional().describe('Spare parts count available in inventory'),
       source: z.string().optional().describe('Source of event data'),
     }),
     examples: {
       request: {
         machine_id: 'M-004',
         event_type: 'sensor_anomaly',
+        data_source_priority: 'user_input',
         vibration_level: 14.2,
         temperature: 108.5,
         pressure: 3.8,
@@ -42,17 +47,21 @@ export class DecisionTwinTools {
     const vibrationLevel = input.vibration_level ?? input.vibration ?? input.vibrationMmS;
     const temperature = input.temperature ?? input.temp ?? input.temperatureCelsius;
     const pressure = input.pressure ?? input.hydraulic_pressure_bar ?? input.hydraulicPressureBar;
+    const priority = input.data_source_priority || input.dataSourcePriority || process.env.DATA_SOURCE_PRIORITY || 'user_input';
 
-    ctx.logger.info(`[DecisionTwin] Triggering orchestrator for ${machineId}`, { machineId, vibrationLevel, temperature, pressure });
+    ctx.logger.info(`[DecisionTwin] Triggering orchestrator for ${machineId} (Policy: ${priority})`, { machineId, vibrationLevel, temperature, pressure, priority });
 
     const resultState = await DecisionTwinOrchestrator.run({
       event_type: input.event_type || 'sensor_anomaly',
+      data_source_priority: priority as any,
       event: {
         machine_id: machineId,
         timestamp: new Date().toISOString(),
         vibration_level: vibrationLevel,
         temperature: temperature,
         pressure: pressure,
+        bearing_wear: input.bearing_wear ?? input.bearingWear,
+        inventory: input.inventory ?? input.inventory_count,
         source: input.source || 'MCP Client Request',
       },
     });
@@ -63,9 +72,13 @@ export class DecisionTwinTools {
       status: 'completed',
       machine_id: machineId,
       event_type: input.event_type || 'sensor_anomaly',
+      data_source_policy: decision?.data_source_policy_applied || priority,
+      conflicts_resolved: decision?.conflicts_resolved,
+      data_sources_summary: decision?.data_sources_summary,
       chosen_action: decision?.chosen_action,
       confidence: decision?.confidence,
       reason: decision?.reason,
+      supporting_evidence: decision?.supporting_evidence,
       negotiation_rounds: decision?.negotiation_rounds,
       consulted_agents: decision?.agents_consulted,
       vetoes: decision?.vetoes,

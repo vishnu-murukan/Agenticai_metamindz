@@ -53,6 +53,8 @@ export class DecisionTwinOrchestrator {
           ...state,
           negotiation_round: agentResult.negotiation_round ?? state.negotiation_round,
           blackboard: agentResult.blackboard || state.blackboard,
+          conflicts: agentResult.conflicts || state.conflicts,
+          data_sources: agentResult.data_sources || state.data_sources,
           agents_completed: agentResult.agents_completed || state.agents_completed,
           proposals: agentResult.proposals || state.proposals,
           vetoes: agentResult.vetoes || state.vetoes,
