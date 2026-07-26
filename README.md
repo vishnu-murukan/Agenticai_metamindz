@@ -21,6 +21,20 @@
 
 ---
 
+## 🚨 Problem Statement
+
+In modern Industry 4.0 manufacturing plants, high-stakes operational machinery (such as 5-Axis CNC Mills and Heavy Hydraulic Presses) experiences unplanned hardware anomalies—including spindle bearing wear, vibration spikes, and thermal runaway. 
+
+When an anomaly occurs, plant operators face a critical financial and operational dilemma:
+1. **Immediate Repair Shutdown**: Halts production lines immediately, costing **$50,000+ per hour** in lost throughput and idle labor.
+2. **Delayed Maintenance**: Risks catastrophic bearing lockup or spindle destruction, resulting in **$400,000+** in equipment replacement, delivery penalties, and safety hazards.
+
+**Traditional static systems fail** because they rely on fixed, hardcoded thresholds or isolated single-agent rules that ignore real-time inventory bin stock, historical precedent, safety SOP vetoes, schedule deadlines, and telemetry source conflicts. 
+
+**Agent Nexus (Decision Twin)** solves this by orchestrating a 12-agent autonomous consensus operating system that dynamically evaluates live telemetry, balances risk vs cost, resolves data-source conflicts, enforces mandatory safety vetoes, and generates executable maintenance work orders.
+
+---
+
 ## 🌐 Live Cloud Infrastructure & MCP Endpoint
 
 - **Production Cloud Endpoint**: `https://agent-nexus-6a6560aa-metamindz-amrita-university-coimbatore.app.nitrocloud.ai/mcp`
