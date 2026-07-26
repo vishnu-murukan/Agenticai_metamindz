@@ -164,72 +164,96 @@ export const INVENTORY_DATABASE: Record<string, {
   }
 };
 
-export function lookupSensorData(machineId: string) {
+export function lookupSensorData(
+  machineId: string,
+  overrides?: { vibration_level?: number; temperature?: number; pressure?: number }
+) {
   const id = machineId.toUpperCase();
-  const data = MACHINE_DATABASE[id] || {
+  const dbEntry = MACHINE_DATABASE[id];
+  const baseData = dbEntry || {
     name: `Machine ${id}`,
     type: 'Standard Production Equipment',
     location: 'Main Plant Floor',
     status: 'normal' as const,
     healthScore: 88,
-    temperatureCelsius: 88.5,
-    vibrationMmS: 8.2,
-    bearingTempCelsius: 92.0,
-    hydraulicPressureBar: 3.8,
+    temperatureCelsius: 48.2,
+    vibrationMmS: 1.2,
+    bearingTempCelsius: 52.0,
+    hydraulicPressureBar: 1.2,
     rotationSpeedRpm: 5000,
     operatingHours: 2400,
     lastMaintenanceDate: '2026-06-01',
-    componentWear: { bearings: 80, motor: 15 },
+    componentWear: { bearings: 20, motor: 15 },
     recentIncidents: [],
     hourlyProductionValueUSD: 3000
   };
 
+  const vibrationMmS = overrides?.vibration_level !== undefined ? Number(overrides.vibration_level) : baseData.vibrationMmS;
+  const temperatureCelsius = overrides?.temperature !== undefined ? Number(overrides.temperature) : baseData.temperatureCelsius;
+  const hydraulicPressureBar = overrides?.pressure !== undefined ? Number(overrides.pressure) : baseData.hydraulicPressureBar;
+  const bearingTempCelsius = Math.max(temperatureCelsius, baseData.bearingTempCelsius);
+
+  const status = (vibrationMmS > 7.5 || temperatureCelsius > 85.0) ? 'alarm' :
+                 (vibrationMmS > 3.5 || temperatureCelsius > 60.0) ? 'warning' : 'normal';
+
   const anomalies: string[] = [];
-  if (data.vibrationMmS > 3.5) {
-    anomalies.push(`Vibration level ${data.vibrationMmS} mm/s exceeds safety baseline (max 3.5 mm/s)`);
+  if (vibrationMmS > 3.5) {
+    anomalies.push(`Vibration level ${vibrationMmS} mm/s exceeds safety baseline (max 3.5 mm/s)`);
   }
-  if (data.bearingTempCelsius > 80.0) {
-    anomalies.push(`Bearing temperature ${data.bearingTempCelsius}°C exceeds thermal limit (max 80.0°C)`);
+  if (temperatureCelsius > 60.0) {
+    anomalies.push(`Temperature ${temperatureCelsius}°C exceeds thermal limit (max 60.0°C)`);
+  }
+  if (hydraulicPressureBar > 3.5) {
+    anomalies.push(`Hydraulic pressure ${hydraulicPressureBar} bar exceeds nominal limit (3.5 bar)`);
   }
 
   return {
     machineId: id,
-    name: data.name,
-    type: data.type,
-    location: data.location,
+    name: baseData.name,
+    type: baseData.type,
+    location: baseData.location,
     timestamp: new Date().toISOString(),
-    status: data.status,
+    status,
     telemetry: {
-      temperature_celsius: data.temperatureCelsius,
-      vibration_mm_s: data.vibrationMmS,
-      bearing_temp_celsius: data.bearingTempCelsius,
-      hydraulic_pressure_bar: data.hydraulicPressureBar,
-      rotation_speed_rpm: data.rotationSpeedRpm
+      temperature_celsius: temperatureCelsius,
+      vibration_mm_s: vibrationMmS,
+      bearing_temp_celsius: bearingTempCelsius,
+      hydraulic_pressure_bar: hydraulicPressureBar,
+      rotation_speed_rpm: baseData.rotationSpeedRpm
     },
     anomalies,
     hasActiveAnomalies: anomalies.length > 0
   };
 }
 
-export function lookupMachineHealth(machineId: string) {
+export function lookupMachineHealth(
+  machineId: string,
+  overrides?: { vibration_level?: number; temperature?: number }
+) {
   const id = machineId.toUpperCase();
-  const data = MACHINE_DATABASE[id] || {
-    name: `Machine ${id}`,
-    healthScore: 38,
-    operatingHours: 4250,
-    lastMaintenanceDate: '2026-05-12',
-    componentWear: { spindleBearing: 87, motorAlignment: 64 },
-    recentIncidents: []
-  };
+  const dbEntry = MACHINE_DATABASE[id];
+  const baseHealthScore = dbEntry ? dbEntry.healthScore : 88;
+
+  let healthScore = baseHealthScore;
+
+  if (overrides?.vibration_level !== undefined || overrides?.temperature !== undefined) {
+    const vib = overrides.vibration_level !== undefined ? Number(overrides.vibration_level) : 1.2;
+    const temp = overrides.temperature !== undefined ? Number(overrides.temperature) : 48.2;
+    healthScore = Math.max(10, Math.round(100 - (vib * 4.5 + Math.max(0, temp - 40) * 0.4)));
+  }
+
+  const status = healthScore < 40 ? 'critical' : healthScore < 75 ? 'degraded' : 'healthy';
+  const recommendedAction = healthScore < 40 ? 'Immediate Component Replacement Required' : healthScore < 75 ? 'Schedule Preventive Maintenance' : 'Continue Normal Operation';
 
   return {
     machineId: id,
-    name: data.name,
-    healthScore: data.healthScore,
-    operatingHours: data.operatingHours,
-    lastMaintenanceDate: data.lastMaintenanceDate,
-    componentWearPercent: data.componentWear,
-    recommendedAction: data.healthScore < 40 ? 'IMMEDIATE REPAIR' : 'SCHEDULED MAINTENANCE'
+    name: dbEntry ? dbEntry.name : `Machine ${id}`,
+    healthScore,
+    status,
+    operatingHours: dbEntry ? dbEntry.operatingHours : 2400,
+    lastMaintenanceDate: dbEntry ? dbEntry.lastMaintenanceDate : '2026-06-01',
+    componentWearPercent: dbEntry ? dbEntry.componentWear : { bearings: Math.round(100 - healthScore) },
+    recommendedAction
   };
 }
 
@@ -257,13 +281,26 @@ export function lookupInventory(partId: string) {
   };
 }
 
-export function calculateDowntimeCost(machineId: string, hours: number) {
-  const hourlyCost = 12500;
-  const totalCost = hourlyCost * hours;
+export function calculateDowntimeCost(
+  machineId: string,
+  hours: number,
+  vibrationLevel?: number,
+  temperature?: number
+) {
+  const baseHourlyCost = 12500;
+  const vib = vibrationLevel !== undefined ? Number(vibrationLevel) : 1.2;
+  const temp = temperature !== undefined ? Number(temperature) : 48.2;
+  const severityFactor = Math.max(1.0, (vib / 5.0) * (temp / 80.0));
+
+  const hourlyRate = Math.round(baseHourlyCost * severityFactor);
+  const totalCost = Math.round(hourlyRate * hours);
+
   return {
     machineId,
     downtimeHours: hours,
+    severityFactor: Number(severityFactor.toFixed(2)),
+    hourlyDowntimeRateUSD: hourlyRate,
     totalEstimatedCostUSD: totalCost,
-    summary: `Estimated ${hours}h downtime for ${machineId} results in a $${totalCost.toLocaleString()} financial impact.`
+    summary: `Estimated ${hours}h downtime for ${machineId} (severity factor ${severityFactor.toFixed(2)}) results in a $${totalCost.toLocaleString()} financial impact.`
   };
 }

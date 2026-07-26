@@ -99,24 +99,36 @@ export class DecisionTwinTools {
     name: 'get_sensor_data',
     description: 'Fetch real-time sensor stream data for a specified machine ID, including temperature, vibration, hydraulic pressure, and anomaly flags.',
     inputSchema: z.object({
-      machineId: z.string().describe('Unique machine identifier (e.g. M-004, M-001, M-002, M-003, Machine-#4)')
+      machineId: z.string().describe('Unique machine identifier (e.g. M-004, M-001, M-002, M-003, Machine-#4)'),
+      vibration_level: z.number().optional().describe('Optional live vibration reading (mm/s)'),
+      temperature: z.number().optional().describe('Optional live temperature reading (°C)'),
+      pressure: z.number().optional().describe('Optional live hydraulic pressure reading (bar)'),
     })
   })
-  async getSensorData(input: { machineId: string }, ctx: ExecutionContext) {
-    ctx.logger.info('Fetching sensor data', { machineId: input.machineId });
-    return lookupSensorData(input.machineId);
+  async getSensorData(input: { machineId: string; vibration_level?: number; temperature?: number; pressure?: number }, ctx: ExecutionContext) {
+    ctx.logger.info('Fetching sensor data', { machineId: input.machineId, input });
+    return lookupSensorData(input.machineId, {
+      vibration_level: input.vibration_level,
+      temperature: input.temperature,
+      pressure: input.pressure,
+    });
   }
 
   @Tool({
     name: 'check_machine_health',
     description: 'Retrieve maintenance history, component wear breakdown, and maintenance-derived health score for a machine.',
     inputSchema: z.object({
-      machineId: z.string().describe('Target machine identifier (e.g. M-004, Machine-#4)')
+      machineId: z.string().describe('Target machine identifier (e.g. M-004, Machine-#4)'),
+      vibration_level: z.number().optional().describe('Optional live vibration level'),
+      temperature: z.number().optional().describe('Optional live temperature level'),
     })
   })
-  async checkMachineHealth(input: { machineId: string }, ctx: ExecutionContext) {
-    ctx.logger.info('Evaluating machine health', { machineId: input.machineId });
-    return lookupMachineHealth(input.machineId);
+  async checkMachineHealth(input: { machineId: string; vibration_level?: number; temperature?: number }, ctx: ExecutionContext) {
+    ctx.logger.info('Evaluating machine health', { machineId: input.machineId, input });
+    return lookupMachineHealth(input.machineId, {
+      vibration_level: input.vibration_level,
+      temperature: input.temperature,
+    });
   }
 
   @Tool({
@@ -136,30 +148,44 @@ export class DecisionTwinTools {
     description: 'Calculate financial impact projection for machine downtime based on lost throughput revenue, idle labor, expedited maintenance rates, and delivery penalties.',
     inputSchema: z.object({
       machineId: z.string().describe('Target machine ID'),
-      hours: z.number().min(0.1).describe('Duration of estimated downtime in hours')
+      hours: z.number().min(0.1).describe('Duration of estimated downtime in hours'),
+      vibration_level: z.number().optional().describe('Optional live vibration reading'),
+      temperature: z.number().optional().describe('Optional live temperature reading'),
     })
   })
-  async estimateDowntimeCost(input: { machineId: string; hours: number }, ctx: ExecutionContext) {
-    ctx.logger.info('Estimating downtime financial impact', { machineId: input.machineId, hours: input.hours });
-    return calculateDowntimeCost(input.machineId, input.hours);
+  async estimateDowntimeCost(input: { machineId: string; hours: number; vibration_level?: number; temperature?: number }, ctx: ExecutionContext) {
+    ctx.logger.info('Estimating downtime financial impact', { machineId: input.machineId, hours: input.hours, input });
+    return calculateDowntimeCost(input.machineId, input.hours, input.vibration_level, input.temperature);
   }
 
   @Tool({
     name: 'calculate_risk',
     description: 'Calculate composite operational risk score combining safety SOP compliance, financial risk, and schedule delay risk.',
     inputSchema: z.object({
-      machineId: z.string().describe('Target machine ID for risk calculation')
+      machineId: z.string().describe('Target machine ID for risk calculation'),
+      vibration_level: z.number().optional().describe('Vibration reading'),
+      temperature: z.number().optional().describe('Temperature reading'),
     })
   })
-  async calculateRisk(input: { machineId: string }, ctx: ExecutionContext) {
+  async calculateRisk(input: { machineId: string; vibration_level?: number; temperature?: number }, ctx: ExecutionContext) {
     ctx.logger.info('Calculating composite operational risk', { machineId: input.machineId });
+    const vib = input.vibration_level ?? 1.2;
+    const temp = input.temperature ?? 48.2;
+    const severityFactor = Math.max(1.0, (vib / 5.0) * (temp / 80.0));
+    const compositeRiskScore = Number(Math.min(10.0, severityFactor * 2.5).toFixed(1));
+    const isCritical = vib > 7.5 || temp > 85.0;
+
     return {
       machineId: input.machineId,
-      compositeRiskScore: 8.5,
-      riskLevel: 'CRITICAL',
-      sopVetoStatus: true,
-      riskFactors: ['SOP-MFG-042: Vibration exceeds 7.5 mm/s limit. Mandatory repair.'],
-      recommendation: 'SAFETY VETO: Continuous operation VETOED by Safety SOP.'
+      compositeRiskScore,
+      riskLevel: isCritical ? 'CRITICAL' : compositeRiskScore > 5.0 ? 'MODERATE' : 'LOW',
+      sopVetoStatus: isCritical,
+      riskFactors: isCritical
+        ? [`SOP-MFG-042: Telemetry (Vib ${vib} mm/s, Temp ${temp}°C) exceeds safety limit. Mandatory repair required.`]
+        : ['Telemetry within acceptable operational baseline.'],
+      recommendation: isCritical
+        ? 'SAFETY VETO: Continuous operation VETOED by Safety SOP.'
+        : 'SAFETY APPROVED: Baseline telemetry compliant with plant SOP.'
     };
   }
 
@@ -168,16 +194,17 @@ export class DecisionTwinTools {
     description: 'Generate an executable work order for machine maintenance, assigning a qualified technician, reserving spare parts, and documenting safety protocols.',
     inputSchema: z.object({
       machineId: z.string().describe('Target machine ID'),
-      action: z.string().describe('Maintenance action to execute')
+      action: z.string().describe('Maintenance action to execute'),
+      priority: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']).optional(),
     })
   })
-  async generateWorkOrder(input: { machineId: string; action: string }, ctx: ExecutionContext) {
+  async generateWorkOrder(input: { machineId: string; action: string; priority?: string }, ctx: ExecutionContext) {
     ctx.logger.info('Generating work order', { machineId: input.machineId, action: input.action });
     return {
       workOrderId: `WO-${Date.now()}-${input.machineId}`,
       machineId: input.machineId,
       action: input.action,
-      priority: 'HIGH',
+      priority: input.priority || (input.action === 'immediate_repair' ? 'CRITICAL' : 'MEDIUM'),
       assignedTechnician: 'Tech #14 - Senior Mechanical Specialist (Marcus Vance)',
       reservedParts: ['PART-BRG-409 (Spindle Bearing Set)'],
       status: 'CREATED_AND_SCHEDULED'
@@ -197,12 +224,12 @@ export class DecisionTwinTools {
     return {
       results: [
         {
-          incident_id: 'INC-2024-0847',
-          machine_id: input.machine_id || 'Machine-#4',
-          symptoms: 'High vibration + elevated temperature',
-          root_cause: 'Bearing wear in spindle assembly',
+          incident_id: 'INC-2024-089',
+          machine_id: input.machine_id || 'M-004',
+          symptoms: 'High vibration + elevated spindle bearing temperature',
+          root_cause: 'Spindle bearing degradation under high feed rate',
           outcome: 'Resolved in 4 hours via immediate bearing replacement',
-          similarity_score: 0.91,
+          similarity_score: 0.406,
         }
       ]
     };
@@ -212,21 +239,35 @@ export class DecisionTwinTools {
     name: 'simulate_scenario',
     description: 'Run counterfactual simulation for candidate maintenance actions',
     inputSchema: z.object({
-      action: z.enum(['immediate_repair', 'delay_repair', 'reduced_capacity']),
+      action: z.enum(['immediate_repair', 'delay_repair', 'reduced_capacity', 'continue_normal_operation']),
       machine_id: z.string(),
+      vibration_level: z.number().optional(),
+      temperature: z.number().optional(),
     })
   })
-  async simulateScenario(input: { action: string; machine_id: string }, ctx: ExecutionContext) {
+  async simulateScenario(input: { action: string; machine_id: string; vibration_level?: number; temperature?: number }, ctx: ExecutionContext) {
     ctx.logger.info(`Simulating scenario ${input.action} for ${input.machine_id}`);
-    const scoreMap: Record<string, number> = {
-      immediate_repair: 0.85,
-      reduced_capacity: 0.55,
-      delay_repair: 0.25,
-    };
+    const vib = input.vibration_level ?? 6.5;
+    const temp = input.temperature ?? 85.0;
+    const severityFactor = Math.max(1.0, (vib / 5.0) * (temp / 80.0));
+
+    const isHealthy = vib <= 3.5 && temp <= 60.0;
+    const isCritical = vib > 7.5 || temp > 85.0;
+
+    let score = 0.85;
+    if (input.action === 'continue_normal_operation' || input.action === 'immediate_repair') {
+      score = isHealthy ? 0.98 : isCritical ? 0.92 : 0.80;
+    } else if (input.action === 'reduced_capacity') {
+      score = !isHealthy && !isCritical ? 0.96 : isHealthy ? 0.70 : 0.52;
+    } else {
+      score = isHealthy ? 0.88 : 0.12;
+    }
+
     return {
       action: input.action,
       machine_id: input.machine_id,
-      score: scoreMap[input.action] ?? 0.5,
+      severity_factor: Number(severityFactor.toFixed(2)),
+      resilience_score: score,
       estimated_downtime: input.action === 'immediate_repair' ? '4 hours' : '0 hours',
     };
   }

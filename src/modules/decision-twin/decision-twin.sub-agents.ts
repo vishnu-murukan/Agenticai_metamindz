@@ -78,19 +78,22 @@ function buildModelProposal(state: DecisionTwinState, round: number): RM.Proposa
 export async function sensorAgent(state: DecisionTwinState): Promise<Partial<DecisionTwinState>> {
   const event = state.event || {};
   const machineId = event.machine_id || 'unknown';
-  const reasoning = `Event reported vibration=${event.vibration_level ?? 'n/a'}, temp=${event.temperature ?? 'n/a'} -- calling get_sensor_data('${machineId}') to confirm against live telemetry.`;
+  const reasoning = `Event reported vibration=${event.vibration_level ?? 'n/a'}, temp=${event.temperature ?? 'n/a'}, pressure=${event.pressure ?? 'n/a'} -- calling get_sensor_data('${machineId}') to confirm against live telemetry.`;
 
-  const sensorData = lookupSensorData(machineId);
+  const sensorData = lookupSensorData(machineId, {
+    vibration_level: event.vibration_level,
+    temperature: event.temperature,
+    pressure: event.pressure,
+  });
 
   const vibration = sensorData.telemetry.vibration_mm_s;
   const temperature = sensorData.telemetry.temperature_celsius;
-  const pressure = event.pressure !== undefined ? Number(event.pressure) : sensorData.telemetry.hydraulic_pressure_bar;
+  const pressure = sensorData.telemetry.hydraulic_pressure_bar;
 
   const anomalies = [...sensorData.anomalies];
-  if (pressure > 150) anomalies.push(`Hydraulic pressure ${pressure} PSI exceeds threshold (150)`);
 
-  const severity = (vibration > 8 || temperature > 95) ? 'critical' :
-                   (vibration > 6 || temperature > 85) ? 'high' :
+  const severity = (vibration > 7.5 || temperature > 85) ? 'critical' :
+                   (vibration > 3.5 || temperature > 60) ? 'high' :
                    anomalies.length > 0 ? 'moderate' : 'normal';
 
   const findings = {
@@ -120,7 +123,10 @@ export async function maintenanceAgent(state: DecisionTwinState): Promise<Partia
   const sensor = (state.blackboard || {}).sensor_agent || {};
   const reasoning = `SensorAgent flagged severity='${sensor.severity || 'unknown'}' -- calling check_machine_health('${machineId}') for maintenance-derived health score.`;
 
-  const health = lookupMachineHealth(machineId);
+  const health = lookupMachineHealth(machineId, {
+    vibration_level: event.vibration_level,
+    temperature: event.temperature,
+  });
 
   const healthScore = health.healthScore / 100;
   const failureProbability = Number((1 - healthScore).toFixed(2));
@@ -257,10 +263,11 @@ export async function financeAgent(state: DecisionTwinState): Promise<Partial<De
   const maintenance = (state.blackboard || {}).maintenance_agent || {};
   const reasoning = `MaintenanceAgent recommendation is '${maintenance.recommendation || 'n/a'}' -- calling estimate_downtime_cost for both the 4h repair-now window and the 48h delay-risk window to quantify the tradeoff.`;
 
-  const repairNow = calculateDowntimeCost(machineId, 4);
-  const delayed = calculateDowntimeCost(machineId, 48);
+  const repairNow = calculateDowntimeCost(machineId, 4, event.vibration_level, event.temperature);
+  const delayed = calculateDowntimeCost(machineId, 48, event.vibration_level, event.temperature);
 
-  const delayProbability = 0.65;
+  const severityFactor = Math.max(1.0, ((event.vibration_level ?? 1.2) / 5.0) * ((event.temperature ?? 48.2) / 80.0));
+  const delayProbability = Number(Math.min(0.95, 0.05 * severityFactor * 7).toFixed(2));
   const expectedDelayCost = Math.round(delayed.totalEstimatedCostUSD * delayProbability);
 
   const findings = {
@@ -269,13 +276,14 @@ export async function financeAgent(state: DecisionTwinState): Promise<Partial<De
     delay_repair_risk_cost: delayed.totalEstimatedCostUSD,
     delay_repair_probability: delayProbability,
     expected_delay_cost: expectedDelayCost,
-    summary: `estimate_downtime_cost: repair now $${repairNow.totalEstimatedCostUSD.toLocaleString()} (4h) vs. expected delay cost $${expectedDelayCost.toLocaleString()} (65% x 48h risk).`,
+    summary: `estimate_downtime_cost: repair now $${repairNow.totalEstimatedCostUSD.toLocaleString()} (4h) vs. expected delay cost $${expectedDelayCost.toLocaleString()} (${Math.round(delayProbability * 100)}% x 48h risk).`,
   };
 
+  const costRatio = repairNow.totalEstimatedCostUSD > 0 ? (expectedDelayCost / repairNow.totalEstimatedCostUSD).toFixed(1) : '1.0';
   const proposals: Proposal[] = [{
     source: 'finance_agent',
-    action: 'immediate_repair',
-    reason: `Expected delay cost ($${expectedDelayCost.toLocaleString()}) is ${(expectedDelayCost / repairNow.totalEstimatedCostUSD).toFixed(1)}x repair-now cost ($${repairNow.totalEstimatedCostUSD.toLocaleString()})`,
+    action: expectedDelayCost > repairNow.totalEstimatedCostUSD ? 'immediate_repair' : 'continue_normal_operation',
+    reason: `Expected delay cost ($${expectedDelayCost.toLocaleString()}) is ${costRatio}x repair-now cost ($${repairNow.totalEstimatedCostUSD.toLocaleString()})`,
     confidence: 0.80,
   }];
 
