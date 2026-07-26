@@ -6,8 +6,10 @@
 
 import 'dotenv/config';
 
-// Force pure HTTP transport mode for NitroCloud container health probes
+// Force pure HTTP transport mode and 0.0.0.0 host binding for NitroCloud container ingress health checks
 process.env.MCP_TRANSPORT_TYPE = 'http';
+process.env.HOST = '0.0.0.0';
+process.env.MCP_SERVER_HOST = '0.0.0.0';
 
 import { McpApplicationFactory } from '@nitrostack/core';
 import { AppModule } from './app.module.js';
