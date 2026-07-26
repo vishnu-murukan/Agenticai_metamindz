@@ -6,6 +6,7 @@ const DECOMPOSITION_RULES: Record<string, SubGoal[]> = {
     { id: 'check_health', description: 'Assess machine health from maintenance history', requiredAgent: 'maintenance_agent', priority: 1 },
     { id: 'search_precedent', description: 'Find similar past incidents via historical memory', requiredAgent: 'memory_agent', priority: 2 },
     { id: 'evaluate_schedule', description: 'Assess production schedule and delivery impact', requiredAgent: 'production_agent', priority: 2 },
+    { id: 'assess_quality', description: 'Detailed surface roughness and defect risk analysis', requiredAgent: 'quality_agent', priority: 2 },
   ],
   maintenance_alert: [
     { id: 'check_health', description: 'Deep-dive machine health assessment', requiredAgent: 'maintenance_agent', priority: 1 },

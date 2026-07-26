@@ -8,42 +8,51 @@ export class DecisionTwinTools {
     name: 'run_decision_twin_orchestrator',
     description: 'Triggers the multi-agent Decision Twin orchestrator for manufacturing & Industry 4.0 anomalies. Dynamically activates Planner, Plant Manager, Sensor, Maintenance, Memory, Production, Inventory, Finance, Devil\'s Advocate, Safety, Risk, Quality, and Scenario Simulation agents.',
     inputSchema: z.object({
-      machine_id: z.string().describe('Identifier of the machine reporting anomaly (e.g. Machine-#4 or M-004)'),
-      event_type: z.enum(['sensor_anomaly', 'maintenance_alert', 'quality_deviation']).describe('Type of incoming manufacturing event'),
-      vibration_level: z.number().describe('Vibration reading (0-10)'),
-      temperature: z.number().describe('Temperature reading in Celsius'),
-      pressure: z.number().describe('Pressure reading in PSI'),
+      machine_id: z.string().optional().describe('Identifier of the machine reporting anomaly (e.g. M-004 or M-001)'),
+      machineId: z.string().optional().describe('Alias for machine_id'),
+      machine: z.string().optional().describe('Alias for machine_id'),
+      event_type: z.enum(['sensor_anomaly', 'maintenance_alert', 'quality_deviation']).optional().default('sensor_anomaly').describe('Type of incoming manufacturing event'),
+      vibration_level: z.number().optional().describe('Vibration reading in mm/s'),
+      vibration: z.number().optional().describe('Alias for vibration_level'),
+      temperature: z.number().optional().describe('Temperature reading in Celsius'),
+      temp: z.number().optional().describe('Alias for temperature'),
+      pressure: z.number().optional().describe('Pressure reading in bar'),
       source: z.string().optional().describe('Source of event data'),
     }),
     examples: {
       request: {
-        machine_id: 'Machine-#4',
+        machine_id: 'M-004',
         event_type: 'sensor_anomaly',
-        vibration_level: 8.2,
-        temperature: 92,
-        pressure: 145,
+        vibration_level: 14.2,
+        temperature: 108.5,
+        pressure: 3.8,
         source: 'IoT Sensor Gateway',
       },
       response: {
         status: 'completed',
         chosen_action: 'immediate_repair',
         confidence: 0.85,
-        summary: 'Decision Twin converged on immediate_repair with 85% confidence after 11 agent activations and 1 safety veto.',
+        summary: 'Decision Twin converged on immediate_repair after multi-agent negotiation.',
       }
     }
   })
   @Widget('decision-twin-result')
   async runOrchestrator(input: any, ctx: ExecutionContext) {
-    ctx.logger.info(`[DecisionTwin] Triggering orchestrator for ${input.machine_id}`, input);
+    const machineId = input.machine_id || input.machineId || input.machine || 'M-004';
+    const vibrationLevel = input.vibration_level ?? input.vibration ?? input.vibrationMmS;
+    const temperature = input.temperature ?? input.temp ?? input.temperatureCelsius;
+    const pressure = input.pressure ?? input.hydraulic_pressure_bar ?? input.hydraulicPressureBar;
+
+    ctx.logger.info(`[DecisionTwin] Triggering orchestrator for ${machineId}`, { machineId, vibrationLevel, temperature, pressure });
 
     const resultState = await DecisionTwinOrchestrator.run({
-      event_type: input.event_type,
+      event_type: input.event_type || 'sensor_anomaly',
       event: {
-        machine_id: input.machine_id,
+        machine_id: machineId,
         timestamp: new Date().toISOString(),
-        vibration_level: input.vibration_level,
-        temperature: input.temperature,
-        pressure: input.pressure,
+        vibration_level: vibrationLevel,
+        temperature: temperature,
+        pressure: pressure,
         source: input.source || 'MCP Client Request',
       },
     });
@@ -52,8 +61,8 @@ export class DecisionTwinTools {
 
     return {
       status: 'completed',
-      machine_id: input.machine_id,
-      event_type: input.event_type,
+      machine_id: machineId,
+      event_type: input.event_type || 'sensor_anomaly',
       chosen_action: decision?.chosen_action,
       confidence: decision?.confidence,
       reason: decision?.reason,
