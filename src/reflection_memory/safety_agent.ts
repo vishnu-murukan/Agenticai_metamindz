@@ -1,4 +1,4 @@
-import { Proposal, SOPRule, SafetyVerdict, VerdictType, SOPCategory } from "./models";
+import { Proposal, SOPRule, SafetyVerdict, VerdictType, SOPCategory } from "./models.js";
 
 export class SafetyAgent {
   public agentId: string;

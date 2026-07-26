@@ -12,46 +12,49 @@ src/widgets/out/
 .env.local
 .env.*.local
 
-# IDE
+# AI Agent metadata folders
+.agents/
+.antigravity/
+.claude/
+.codex/
+.copilot/
+.cursor/
+.opencode/
+.gemini/
+
+# PDFs and Archives
+*.pdf
+*.zip
+
+# IDE & OS files
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-
-# OS files
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs & Runtime
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Runtime data
 pids/
 *.pid
 *.seed
 *.pid.lock
-
-# Coverage
 coverage/
 .nyc_output/
-
-# Uploads
 uploads/
-
-# TypeScript cache
 *.tsbuildinfo
-
-# Optional npm cache
 .npm/
-
-# Optional eslint cache
 .eslintcache
 
-# OAuth tokens/secrets (never commit these!)
+# OAuth tokens/secrets
 *.pem
 *.key
 tokens.json
+
+# VCS
+.git/

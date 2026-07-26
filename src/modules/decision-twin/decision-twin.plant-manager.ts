@@ -59,6 +59,24 @@ export function dispatchNode(state: DecisionTwinState): Partial<DecisionTwinStat
   if (phase === 'reflection') {
     const vetoes = state.vetoes || [];
     const challenges = state.challenges || [];
+    const round = state.negotiation_round || 1;
+
+    // REFLECTION PILLAR: round 1 objection -> loop back for a revised proposal + re-evaluation.
+    if (round === 1 && (vetoes.length > 0 || challenges.length > 0)) {
+      return {
+        phase: 'reflection',
+        negotiation_round: 2,
+        current_agent: 'renegotiate_agent',
+        active_agents: ['devils_advocate_agent', 'safety_agent'],
+        trace: [
+          ...(state.trace || []),
+          '\n' + '-'.repeat(60),
+          '  PHASE: REFLECTION ROUND 2 (RENEGOTIATION)',
+          `  Round 1 raised ${vetoes.length} veto(es), ${challenges.length} challenge(s) — revising proposal and re-evaluating`,
+          '-'.repeat(60),
+        ],
+      };
+    }
 
     if (vetoes.length > 0 || challenges.length > 0) {
       return {
@@ -69,7 +87,7 @@ export function dispatchNode(state: DecisionTwinState): Partial<DecisionTwinStat
           ...(state.trace || []),
           '\n' + '-'.repeat(60),
           '  PHASE: SCENARIO SIMULATION',
-          `  Triggered by ${vetoes.length} veto(es), ${challenges.length} challenge(s)`,
+          `  Triggered by ${vetoes.length} veto(es), ${challenges.length} challenge(s) still outstanding after ${round} round(s)`,
           `  Activating: [${SIMULATION_AGENTS.join(', ')}]`,
           '-'.repeat(60),
         ],
@@ -82,7 +100,7 @@ export function dispatchNode(state: DecisionTwinState): Partial<DecisionTwinStat
       trace: [
         ...(state.trace || []),
         '\n' + '-'.repeat(60),
-        '  No vetoes/challenges. Moving to CONVERGENCE.',
+        `  No outstanding vetoes/challenges after ${round} negotiation round(s). Moving to CONVERGENCE.`,
         '-'.repeat(60),
       ],
     };
@@ -149,6 +167,7 @@ export function convergeNode(state: DecisionTwinState): Partial<DecisionTwinStat
     challenges_addressed: challenges,
     agents_consulted: completed,
     machine_id: event.machine_id || 'unknown',
+    negotiation_rounds: state.negotiation_round || 1,
   };
 
   const workOrder: WorkOrder = {
@@ -175,8 +194,9 @@ export function convergeNode(state: DecisionTwinState): Partial<DecisionTwinStat
     `  Confidence : ${(finalDecision.confidence * 100).toFixed(0)}%`,
     `  Reason     : ${finalDecision.reason}`,
     `  Consulted  : ${completed.length} agents`,
-    `  Vetoes     : ${vetoes.length}`,
-    `  Challenges : ${challenges.length}`,
+    `  Rounds     : ${finalDecision.negotiation_rounds} negotiation round(s)`,
+    `  Vetoes     : ${vetoes.length} (active) / ${(blackboard.negotiation_history || []).length} negotiation-log entries total`,
+    `  Challenges : ${challenges.length} (active)`,
     '='.repeat(60),
   ];
 

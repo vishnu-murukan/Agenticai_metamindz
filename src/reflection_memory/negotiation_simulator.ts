@@ -1,7 +1,7 @@
-import { Proposal, NegotiationRound, VerdictType, IncidentReport } from "./models";
-import { DevilsAdvocateAgent } from "./devils_advocate";
-import { HistoricalMemoryAgent } from "./historical_memory";
-import { SafetyAgent } from "./safety_agent";
+import { Proposal, NegotiationRound, VerdictType, IncidentReport } from "./models.js";
+import { DevilsAdvocateAgent } from "./devils_advocate.js";
+import { HistoricalMemoryAgent } from "./historical_memory.js";
+import { SafetyAgent } from "./safety_agent.js";
 
 export class NegotiationSimulator {
   public devilsAdvocate: DevilsAdvocateAgent;

@@ -17,13 +17,16 @@ export interface Veto {
   vetoed_action: string;
   reason: string;
   sop_reference?: string;
+  round?: number;
 }
 
 export interface Challenge {
+  source: string;
   challenged_proposal: string;
   challenge: string;
   requested_evidence: string;
   severity: string;
+  round?: number;
 }
 
 export interface WorkOrder {
@@ -51,28 +54,32 @@ export interface FinalDecision {
   challenges_addressed: Challenge[];
   agents_consulted: string[];
   machine_id: string;
+  negotiation_rounds: number;
 }
 
 export interface DecisionTwinState {
   event: Record<string, any>;
   event_type: 'sensor_anomaly' | 'maintenance_alert' | 'quality_deviation' | string;
-  
+
   sub_goals: SubGoal[];
-  
+
   phase: 'planning' | 'evidence' | 'reflection' | 'simulation' | 'convergence' | string;
   active_agents: string[];
   agents_completed: string[];
   current_agent: string;
-  
+
+  // Tracks how many Devil's Advocate / Safety negotiation rounds have run (reflection pillar).
+  negotiation_round: number;
+
   blackboard: Record<string, any>;
-  
+
   proposals: Proposal[];
   vetoes: Veto[];
   challenges: Challenge[];
   final_decision?: FinalDecision;
-  
+
   work_orders: WorkOrder[];
   notifications: SupervisorNotification[];
-  
+
   trace: string[];
 }

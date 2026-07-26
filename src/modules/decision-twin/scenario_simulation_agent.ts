@@ -52,34 +52,39 @@ export function calculateStrategyMetrics(params: ScenarioSimulationParams = {}):
   const delayDays = params.delayDays ?? 7;
   const capacityPct = params.capacityPct ?? 60.0;
 
-  // Base severity coefficient
-  const severityFactor = Math.max(1.0, (vibrationLevel / 5.0) * (temperature / 80.0));
+  // Empirical SCADA severity factor
+  const severityFactor = Number((Math.max(1.0, (vibrationLevel / 5.0) * (temperature / 80.0))).toFixed(2));
 
-  // --- 1. REPAIR NOW ---
-  const rnDowntimeHrs = 4.0;
-  const rnRepairCost = 45000.0;
+  // Determine physical operational state
+  const isHealthy = vibrationLevel <= 3.5 && temperature <= 60.0;
+  const isCritical = vibrationLevel > 7.5 || temperature > 85.0;
+  const isModerate = !isHealthy && !isCritical;
+
+  // --- 1. CONTINUOUS / REPAIR NOW STRATEGY ---
+  const rnDowntimeHrs = isHealthy ? 0.0 : 4.0;
+  const rnRepairCost = isHealthy ? 0.0 : 45000.0;
   const rnDowntimeLoss = rnDowntimeHrs * hourlyDowntimeCost;
   const rnTotalCost = rnRepairCost + rnDowntimeLoss;
-  const rnFailureRisk = 2.0;
-  const rnDeliveryRisk = 5.0;
-  const rnScore = severityFactor > 1.2 ? 92 : 80;
+  const rnFailureRisk = isHealthy ? 0.5 : isModerate ? 8.5 : Number((Math.min(95.0, severityFactor * 32.0)).toFixed(1));
+  const rnDeliveryRisk = isHealthy ? 1.0 : isModerate ? 5.0 : 18.0;
+  const rnScore = isHealthy ? 98 : isCritical ? 92 : 80;
 
   // --- 2. DELAY REPAIR ---
   const baseDailyRisk = Math.min(0.25, 0.05 * severityFactor);
-  const drFailureProb = Math.min(0.95, 1.0 - Math.exp(-baseDailyRisk * delayDays));
+  const drFailureProb = isHealthy ? 0.01 : Math.min(0.95, 1.0 - Math.exp(-baseDailyRisk * delayDays));
   const drCatastrophicDowntimeHrs = 48.0;
   const drCatastrophicRepairCost = 140000.0;
   const drDowntimeLoss = drCatastrophicDowntimeHrs * hourlyDowntimeCost;
   const drOrderPenalty = activeOrders * 25000.0;
 
-  const drExpectedCost = drFailureProb * (drCatastrophicRepairCost + drDowntimeLoss + drOrderPenalty);
+  const drExpectedCost = isHealthy ? 0.0 : drFailureProb * (drCatastrophicRepairCost + drDowntimeLoss + drOrderPenalty);
   const drFailureRisk = Number((drFailureProb * 100).toFixed(1));
   const drDeliveryRisk = Math.min(95.0, Number((drFailureProb * 90).toFixed(1)));
-  const drScore = Math.max(10, 100 - Math.round(drFailureRisk * 1.1));
+  const drScore = isHealthy ? 88 : Math.max(10, 100 - Math.round(drFailureRisk * 1.1));
 
   // --- 3. REDUCED CAPACITY ---
   const deratedStress = severityFactor * Math.pow(capacityPct / 100.0, 2);
-  const rcFailureProb = Math.min(0.35, 0.03 * deratedStress * delayDays);
+  const rcFailureProb = Math.min(0.55, 0.04 * deratedStress * delayDays);
   const rcCapacityLossPerDay = ((100.0 - capacityPct) / 100.0) * (hourlyDowntimeCost * 12);
   const rcRevenueLoss = rcCapacityLossPerDay * delayDays;
   const rcScheduledRepairCost = 38000.0;
@@ -88,14 +93,28 @@ export function calculateStrategyMetrics(params: ScenarioSimulationParams = {}):
   const rcExpectedCost = rcRevenueLoss + rcScheduledRepairCost + rcPlannedDowntimeLoss + (rcFailureProb * drCatastrophicRepairCost);
   const rcFailureRisk = Number((rcFailureProb * 100).toFixed(1));
   const rcDeliveryRisk = Number(Math.min(60.0, (100.0 - capacityPct) * 0.75).toFixed(1));
-  const rcScore = severityFactor <= 1.5 ? 85 : 72;
+  const rcScore = isModerate ? 96 : isHealthy ? 70 : 52;
+
+  const primaryStrategyId = isHealthy ? 'continue_normal_operation' : isModerate ? 'reduced_capacity' : 'repair_now';
+  const primaryStrategyName = isHealthy ? 'Continue Normal Operation' : isModerate ? 'Operate at Reduced Capacity' : 'Immediate Repair Required';
+  const primaryBadge = isHealthy ? 'NOMINAL STATUS' : isModerate ? 'RECOMMENDED' : 'CRITICAL ACTION';
+  const primaryBadgeColor = isHealthy ? '#22C55E' : isModerate ? '#F59E0B' : '#EF4444';
+
+  const secondaryStrategyId = isHealthy ? 'reduced_capacity' : isModerate ? 'repair_now' : 'reduced_capacity';
+  const secondaryStrategyName = isHealthy ? 'Operate at Reduced Capacity' : isModerate ? 'Immediate Repair Required' : 'Operate at Reduced Capacity (Emergency De-rate)';
+  const secondaryBadge = isHealthy ? 'CONSERVATIVE OPTION' : isModerate ? 'HIGH COST OPTION' : 'TEMPORARY MITIGATION';
+  const secondaryBadgeColor = isHealthy ? '#3B82F6' : isModerate ? '#EF4444' : '#F59E0B';
+
+  const tertiaryStrategyName = isHealthy ? 'Continue Monitoring & Inspection' : isModerate ? 'Schedule Maintenance Later' : 'Delay Repair (High Risk)';
+  const tertiaryBadge = isHealthy ? 'MONITORING ONLY' : isModerate ? 'DEFERRED OPTION' : 'NOT RECOMMENDED';
+  const tertiaryBadgeColor = isHealthy ? '#6B7280' : isModerate ? '#6B7280' : '#DC2626';
 
   const strategies: Record<string, StrategyDetail> = {
-    repair_now: {
-      id: 'repair_now',
-      name: 'Repair Now (Immediate Maintenance)',
-      badge: 'Immediate Action',
-      badgeColor: 'cyan',
+    [primaryStrategyId]: {
+      id: primaryStrategyId,
+      name: primaryStrategyName,
+      badge: primaryBadge,
+      badgeColor: primaryBadgeColor,
       totalExpectedCost: Math.round(rnTotalCost),
       repairCost: Math.round(rnRepairCost),
       downtimeLoss: Math.round(rnDowntimeLoss),
@@ -103,31 +122,39 @@ export function calculateStrategyMetrics(params: ScenarioSimulationParams = {}):
       failureRiskPct: rnFailureRisk,
       deliveryRiskPct: rnDeliveryRisk,
       resilienceScore: rnScore,
-      recommendationRank: rnScore >= Math.max(drScore, rcScore) ? 1 : 2,
-      pros: ['Eliminates catastrophic breakdown risk', 'Uses in-stock parts immediately', 'Fastest restoration to 100% capacity'],
-      cons: ['Immediate 4-hour production stoppage'],
+      recommendationRank: 1,
+      pros: isHealthy
+        ? ['Machine operates within nominal baseline', 'Zero planned or unplanned downtime', 'Full production throughput']
+        : ['Eliminates catastrophic breakdown risk', 'Uses in-stock parts immediately', 'Fastest restoration to 100% capacity'],
+      cons: isHealthy
+        ? ['Continuous monitoring required']
+        : ['Immediate 4-hour production stoppage'],
     },
-    reduced_capacity: {
-      id: 'reduced_capacity',
-      name: `Operate at Reduced Capacity (De-rate to ${Math.round(capacityPct)}%)`,
-      badge: 'Balanced De-Rate',
-      badgeColor: 'amber',
-      totalExpectedCost: Math.round(rcExpectedCost),
-      repairCost: Math.round(rcScheduledRepairCost),
-      downtimeLoss: Math.round(rcRevenueLoss + rcPlannedDowntimeLoss),
+    [secondaryStrategyId]: {
+      id: secondaryStrategyId,
+      name: secondaryStrategyName,
+      badge: secondaryBadge,
+      badgeColor: secondaryBadgeColor,
+      totalExpectedCost: isModerate ? Math.round(rnTotalCost) : Math.round(rcExpectedCost),
+      repairCost: isModerate ? Math.round(rnRepairCost) : Math.round(rcScheduledRepairCost),
+      downtimeLoss: isModerate ? Math.round(rnDowntimeLoss) : Math.round(rcRevenueLoss + rcPlannedDowntimeLoss),
       downtimeHours: 4.0,
-      failureRiskPct: rcFailureRisk,
-      deliveryRiskPct: rcDeliveryRisk,
+      failureRiskPct: isModerate ? rnFailureRisk : rcFailureRisk,
+      deliveryRiskPct: isModerate ? rnDeliveryRisk : rcDeliveryRisk,
       resilienceScore: rcScore,
-      recommendationRank: rnScore >= Math.max(drScore, rcScore) ? 2 : 1,
-      pros: ['Maintains partial order throughput', 'Schedules maintenance during off-peak hours', 'Significant stress reduction'],
-      cons: ['Accumulates daily capacity revenue loss', 'Requires active order rerouting'],
+      recommendationRank: 2,
+      pros: isModerate
+        ? ['Eliminates catastrophic breakdown risk', 'Uses in-stock parts immediately']
+        : ['Maintains partial order throughput', 'Schedules maintenance during off-peak hours', 'Significant stress reduction'],
+      cons: isModerate
+        ? ['Immediate 4-hour production stoppage']
+        : ['Accumulates daily capacity revenue loss', 'Requires active order rerouting'],
     },
     delay_repair: {
       id: 'delay_repair',
-      name: `Delay Repair (${delayDays} Days)`,
-      badge: 'High Risk Deferral',
-      badgeColor: 'rose',
+      name: tertiaryStrategyName,
+      badge: tertiaryBadge,
+      badgeColor: tertiaryBadgeColor,
       totalExpectedCost: Math.round(drExpectedCost),
       repairCost: Math.round(drCatastrophicRepairCost * drFailureProb),
       downtimeLoss: Math.round(drDowntimeLoss * drFailureProb),
@@ -141,9 +168,7 @@ export function calculateStrategyMetrics(params: ScenarioSimulationParams = {}):
     },
   };
 
-  const bestId = Object.keys(strategies).reduce((a, b) =>
-    strategies[a].resilienceScore > strategies[b].resilienceScore ? a : b
-  );
+  const bestId = primaryStrategyId;
 
   return {
     parametersEvaluated: {
@@ -153,11 +178,11 @@ export function calculateStrategyMetrics(params: ScenarioSimulationParams = {}):
       activeOrders,
       delayDays,
       capacityPct,
-      severityFactor: Number(severityFactor.toFixed(2)),
+      severityFactor,
     },
     bestStrategyId: bestId,
     strategies,
-    costSavingsVsDelay: Math.round(drExpectedCost - strategies[bestId].totalExpectedCost),
+    costSavingsVsDelay: Math.max(0, Math.round(drExpectedCost - strategies[bestId].totalExpectedCost)),
   };
 }
 

@@ -4,7 +4,7 @@ import { dispatchNode, convergeNode } from './decision-twin.plant-manager.js';
 import { AGENT_REGISTRY } from './decision-twin.sub-agents.js';
 
 export class DecisionTwinOrchestrator {
-  static run(initialState: Partial<DecisionTwinState>): DecisionTwinState {
+  static async run(initialState: Partial<DecisionTwinState>): Promise<DecisionTwinState> {
     let state: DecisionTwinState = {
       event: initialState.event || {},
       event_type: initialState.event_type || 'sensor_anomaly',
@@ -13,6 +13,7 @@ export class DecisionTwinOrchestrator {
       active_agents: [],
       agents_completed: [],
       current_agent: '',
+      negotiation_round: 1,
       blackboard: {},
       proposals: [],
       vetoes: [],
@@ -23,7 +24,7 @@ export class DecisionTwinOrchestrator {
       ...initialState,
     };
 
-    // Step 1: Planner Agent
+    // Step 1: Planner Agent — dynamic goal decomposition for this specific event
     const plannerResult = plannerNode(state);
     state = { ...state, ...plannerResult };
 
@@ -32,7 +33,7 @@ export class DecisionTwinOrchestrator {
     while (maxSteps > 0) {
       maxSteps--;
 
-      // Plant Manager Dispatch
+      // Plant Manager Dispatch (meta-reasoning over phase + queue)
       const dispatchResult = dispatchNode(state);
       state = { ...state, ...dispatchResult };
 
@@ -46,10 +47,11 @@ export class DecisionTwinOrchestrator {
       }
 
       if (AGENT_REGISTRY[currentAgent]) {
-        // Execute sub-agent node
-        const agentResult = AGENT_REGISTRY[currentAgent](state);
+        // Execute sub-agent node (all real, async — may call live MCP tools / reflection agents)
+        const agentResult = await AGENT_REGISTRY[currentAgent](state);
         state = {
           ...state,
+          negotiation_round: agentResult.negotiation_round ?? state.negotiation_round,
           blackboard: agentResult.blackboard || state.blackboard,
           agents_completed: agentResult.agents_completed || state.agents_completed,
           proposals: agentResult.proposals || state.proposals,

@@ -1,4 +1,4 @@
-import { Proposal, CounterArgument, IncidentReport } from "./models";
+import { Proposal, CounterArgument, IncidentReport } from "./models.js";
 
 export class DevilsAdvocateAgent {
   public agentId: string;

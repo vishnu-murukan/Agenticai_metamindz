@@ -7,10 +7,10 @@ console.log('=' .repeat(60));
 
 console.log('\nRunning Demo Scenario: Machine #4 — Abnormal Vibration & Temperature');
 
-const state = DecisionTwinOrchestrator.run({
+const state = await DecisionTwinOrchestrator.run({
   event_type: 'sensor_anomaly',
   event: {
-    machine_id: 'Machine-#4',
+    machine_id: 'M-004',
     timestamp: new Date().toISOString(),
     vibration_level: 8.2,
     temperature: 92,
@@ -34,7 +34,8 @@ if (decision) {
   console.log(`  Confidence : ${(decision.confidence * 100).toFixed(0)}%`);
   console.log(`  Reason     : ${decision.reason}`);
   console.log(`  Consulted  : ${decision.agents_consulted.join(', ')}`);
-  
+  console.log(`  Rounds     : ${decision.negotiation_rounds}`);
+
   if (decision.vetoes.length > 0) {
     console.log(`  Vetoes     : ${decision.vetoes.length}`);
     for (const v of decision.vetoes) {
@@ -57,5 +58,13 @@ for (const wo of state.work_orders) {
 }
 for (const n of state.notifications) {
   console.log(`    [NOTIFICATION] ${n.summary}`);
+}
+
+const negotiationHistory = (state.blackboard || {}).negotiation_history || [];
+if (negotiationHistory.length > 0) {
+  console.log('\n  FULL NEGOTIATION LOG (append-only, dissent never overwritten):');
+  for (const entry of negotiationHistory) {
+    console.log(`    ${JSON.stringify(entry)}`);
+  }
 }
 console.log();

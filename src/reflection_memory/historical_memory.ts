@@ -1,4 +1,4 @@
-import { IncidentReport } from "./models";
+import { IncidentReport } from "./models.js";
 
 export class HistoricalMemoryAgent {
   public agentId: string;
