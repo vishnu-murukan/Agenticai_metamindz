@@ -6,10 +6,8 @@
 
 import 'dotenv/config';
 
-// Ensure cloud deployment uses pure HTTP transport so cloud readiness probes pass cleanly without STDIO blocking
-if (!process.env.MCP_TRANSPORT_TYPE) {
-  process.env.MCP_TRANSPORT_TYPE = 'http';
-}
+// Force pure HTTP transport mode for NitroCloud container health probes
+process.env.MCP_TRANSPORT_TYPE = 'http';
 
 import { McpApplicationFactory } from '@nitrostack/core';
 import { AppModule } from './app.module.js';
